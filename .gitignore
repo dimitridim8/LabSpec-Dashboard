@@ -137,3 +137,42 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.db
+.env
+.env.*
+.venv/
+venv/
+ENV/
+
+# Supabase/Backend specific
+supabase/.cache/
+
+# VSCode
+.vscode/
+
+# macOS
+.DS_Store
+
+# Node/JS stuff (keep what you already have)
+logs
+*.log
+node_modules/
+dist/
+coverage/
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+.vitepress/dist
+.vitepress/cache
+.yarn/*
+.pnp.*
