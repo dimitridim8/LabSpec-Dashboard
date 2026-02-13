@@ -21,6 +21,18 @@ interface Specimen {
   location: string;
 }
 
+// for specimen status columns ==> will/should move to separte file
+interface DataMap {
+  [key: string]: number;
+}
+
+  const data: DataMap = {
+    "Pending": 8,
+    "In Progress": 12,
+    "Awaiting AST": 5,
+    "Completed": 20
+  };
+
 const Dashboard: React.FC = () => {
   const [specimens, setSpecimens] = useState<Specimen[]>([]);
 
@@ -43,16 +55,18 @@ const Dashboard: React.FC = () => {
       <div className="text-white">Welcome, Dr. Smith</div>
     </nav>
 
-    <div className="container-fluid flex-grow-1 p-4">
-      <div className="main-page-border">
-        <h2 className="mb-4" style={{fontSize: '1.75rem', fontWeight: 'bold'}}>Specimen Overview</h2>
-
+    <div className="container-fluid flex-grow-1 p-4" style={{backgroundColor: '#c9d7e0'}}>
+      <div className="main-page-border" style={{margin:20, justifyContent: 'center'}}>
+        <h2 className="mb-4" style={{fontSize: '1.75rem', fontWeight: 'bold', color: '#2c5282'}}>Specimen Overview</h2>
+        <hr></hr>
         {/* 2. Metric Cards (Pending, In Progress, etc.) */}
         <div className="row mb-4">
-          {['Pending: 8', 'In Progress: 12', 'Awaiting AST: 5', 'Completed: 20'].map((text, i) => (
-            <div className="col-md-3" key={i}>
+          {Object.entries(data).map(([key, value]) => (
+            <div className="col-md-3" key={key}>
               <div className="card border-0 shadow-sm text-center p-3">
-                <span className="fw-bold text-primary">{text}</span>
+                <span className="fw-bold text-primary">
+                  {key}: <b>{value}</b>
+                </span>
               </div>
             </div>
           ))}
@@ -107,6 +121,13 @@ const Dashboard: React.FC = () => {
         <span>🤖 LabBot</span>
       </div>
       <div className="p-3 bg-light small">How can I assist you today?</div>
+      {/* Sample text box for bot for tests & giggles */}
+      <div className="chat-bot-sample-text">
+        <input type="text" id="chat-box-user-input" style={{backgroundColor: "white", color: "black", width: "auto"}}/>
+        <label htmlFor="chat-box-user-input"></label>
+        <p></p>
+        <p></p>
+      </div>
     </div>
   </div>
 );
