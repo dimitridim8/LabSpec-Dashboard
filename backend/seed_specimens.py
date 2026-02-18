@@ -1,3 +1,4 @@
+# This file generates random data into the specimens table when run
 import random
 from datetime import datetime, timezone
 from app.supabase_client import supabase
