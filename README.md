@@ -14,10 +14,19 @@ This project contains:
 # go to backend folder
 cd backend
 
-# install supabase client (if not included)
+# upgrade pip
+python -m pip install --upgrade pip
+
+# install backend dependencies
+pip install -r requirements.txt
+
+# install supabase client (if not already included)
 pip install supabase
 
-# Supabase credentials located in .env in Backend directory
+# create backend environment variables
+# (create backend/.env manually with the following contents)
+# SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
+# SUPABASE_KEY=YOUR_SUPABASE_KEY
 
 # run the backend server
 uvicorn app.main:app --reload --port 8000
