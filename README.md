@@ -1,49 +1,42 @@
-# LabSpec-Dashboard
+# LabSpec Dashboard — Full Local Setup (One Command Flow)
 
-Microbiology labs often rely on fragmented systems, spreadsheets, or manual logs to track specimens. This can lead to:
-- Difficulty identifying a specimen’s current status
-- Poor visibility into delays or bottlenecks
-- Increased risk of misplacement or improper storage
-- Time wasted answering routine status questions
+This project contains:
+- Backend: FastAPI + Supabase
+- Frontend: React (Vite)
 
-LabSpec Dashboard addresses these issues by providing a centralized, easy-to-use dashboard that tracks specimen progress, storage conditions, and potential problems in real time.
+---
 
-## Setup
-### Clone the repository:
-```
-git clone https://github.com/your-org/labspec-dashboard.git
-cd labspec-dashboard/backend
-```
+## Backend + Frontend Local Setup (Copy/Paste)
 
-### Create & activate local virtual environment:
-```
-python -m venv venv
+### Terminal 1 — Backend Setup + Run
 
-#Windows:
-venv\Scripts\activate
+```bash
+# go to backend folder
+cd backend
 
-#Mac/Linux:
-source venv/bin/activate
-```
-You should see ```(venv)```.
+# upgrade pip
+python -m pip install --upgrade pip
 
-### Install dependencies:
-```
+# install backend dependencies
 pip install -r requirements.txt
-```
 
-This will install:
-- FastAPI
-- Uvicorn
-- SQLAlchemy
+# install supabase client (if not already included)
+pip install supabase
 
-### Create local database:
-```
-python app/init_db.py
-```
+# create backend environment variables
+# (create backend/.env manually with the following contents)
+# SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
+# SUPABASE_KEY=YOUR_SUPABASE_KEY
 
-### Run backend:
-```
-python -m uvicorn app.main:app --reload
-```
-You should be able to open ```http://127.0.0.1:8000```.
+# run the backend server
+uvicorn app.main:app --reload --port 8000
+
+# go to frontend folder
+cd frontend
+
+# install frontend dependencies
+npm install
+
+# start the frontend dev server
+npm run dev
+
