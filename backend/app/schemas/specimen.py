@@ -14,7 +14,6 @@ class SpecimenBase(BaseModel):
     patient_name: Optional[str] = None
     patient_dob: Optional[datetime] = None
     collection_time: Optional[datetime] = None
-    ordered_test: Optional[str] = None
 
 
 class SpecimenCreate(SpecimenBase):
@@ -31,7 +30,6 @@ class SpecimenUpdate(BaseModel):
     patient_name: Optional[str] = None
     patient_dob: Optional[datetime] = None
     collection_time: Optional[datetime] = None
-    ordered_test: Optional[str] = None
 
 
 class Specimen(SpecimenBase):

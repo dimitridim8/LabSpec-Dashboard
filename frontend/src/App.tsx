@@ -15,7 +15,6 @@ interface Specimen {
   patient_mrn?: string | null;
   patient_dob?: string | null;
   collection_time?: string | null;
-  ordered_test?: string | null;
 }
 
 // Form shape used by both Add and Edit modals
@@ -284,7 +283,12 @@ const Dashboard: React.FC = () => {
           specimen_code: s.specimen_code,
           sample_type: s.specimen_type,
           status: s.current_status,
-          location: s.storage_location
+          location: s.storage_location,
+
+          patient_name: s.patient_name,
+          patient_mrn: s.patient_mrn,
+          patient_dob: s.patient_dob,
+          collection_time: s.collection_time,
         }));
         setSpecimens(normalized);
       } catch (err: unknown) {
@@ -420,29 +424,65 @@ const Dashboard: React.FC = () => {
         {/* Specimen Intake Form (File Barcode Upload) */}
         <div className="card shadow-sm border-0 mb-4 p-3">
           <h4 className="fw-bold text-primary mb-3">➕ Quick Specimen Intake</h4>
-          <SpecimenIntake
+         <SpecimenIntake
             onAddSpecimen={async (data) => {
-              // create a new specimen object
-              const newSpecimen: Specimen & { patient_name: string; patient_mrn: string; patient_dob: string } = {
-                id: Math.floor(Math.random() * 100000),
-                specimen_code: data.specimen_code,
-                sample_type: data.sample_type,
-                status: data.status,
-                location: data.location,
-                patient_name: "Dummy Name",
-                patient_mrn: `${Math.floor(100000 + Math.random() * 900000)}`,
-                patient_dob: "2000-01-01",
+              // --- Generate random patient info ---
+              const names = ["Alice Smith", "Bob Johnson", "Charlie Lee", "Dana Kim", "Evan Wright"];
+              const randomDate = () =>
+                new Date(+new Date() - Math.floor(Math.random() * 10000000000))
+                  .toISOString()
+                  .split("T")[0];
+
+              const patient_name = names[Math.floor(Math.random() * names.length)];
+              const patient_dob = randomDate();
+              const patient_mrn = `${Date.now()}${Math.floor(Math.random() * 1000)}`; // unique MRN
+
+              // --- Prepare payload for backend ---
+              const payload = {
+                specimen_code: data.specimen_code,      // barcode from scan
+                specimen_type: data.sample_type || null,
+                current_status: data.status,
+                storage_location: data.location || null,
+                storage_condition: null,
+                patient_name,
+                patient_dob,
+                patient_mrn,
               };
 
-              // update the specimens state
-              setSpecimens(prev => [newSpecimen, ...prev]);
+              try {
+                const res = await fetch(`${API_URL}/specimens/`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(payload),
+                });
+                if (!res.ok) {
+                  const d = await res.json().catch(() => ({}));
+                  throw new Error(d?.detail ?? `Server error ${res.status}`);
+                }
+                const created = await res.json();
 
-              // select it so details sidebar updates
-              setSelected(newSpecimen);
+                // --- Normalize and update frontend state ---
+                const newSpecimen: Specimen & { patient_name?: string; patient_dob?: string; patient_mrn?: string } = {
+                  id: created.specimen_id,
+                  specimen_code: created.specimen_code,
+                  sample_type: created.specimen_type,
+                  status: created.current_status,
+                  location: created.storage_location,
+                  patient_name: created.patient_name,
+                  patient_dob: created.patient_dob,
+                  patient_mrn: created.patient_mrn,
+                  collection_time: created.collection_time,
+                };
+
+                setSpecimens(prev => [newSpecimen, ...prev]);
+                setSelected(newSpecimen);
+
+              } catch (err: unknown) {
+                console.error("Failed to add specimen:", err);
+                alert(err instanceof Error ? err.message : "Failed to add specimen");
+              }
             }}
-            onSelectSpecimen={(specimen) => {
-              setSelected(specimen);
-            }}
+            onSelectSpecimen={(specimen) => setSelected(specimen)}
           />
         </div>
 
@@ -551,7 +591,6 @@ const Dashboard: React.FC = () => {
                       {selected.patient_mrn && <p className="small"><strong>MRN:</strong> {selected.patient_mrn}</p>}
                       {selected.patient_dob && <p className="small"><strong>DOB:</strong> {selected.patient_dob}</p>}
                       {selected.collection_time && <p className="small"><strong>Collection Time:</strong> {selected.collection_time}</p>}
-                      {selected.ordered_test && <p className="small"><strong>Ordered Test:</strong> {selected.ordered_test}</p>}
                     </>
                   )}
                 </div>
