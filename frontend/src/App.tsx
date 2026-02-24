@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import beaker from './assets/images/beaker-image.png';
+import { BrowserMultiFormatReader } from '@zxing/browser';
 
 interface Specimen {
   id: number;
@@ -8,6 +9,13 @@ interface Specimen {
   sample_type?: string;
   status: 'Pending' | 'In Progress' | 'Incubating' | 'Awaiting AST' | 'Completed' | 'Flagged';
   location?: string | null;
+
+  // Patient fields
+  patient_name?: string | null;
+  patient_mrn?: string | null;
+  patient_dob?: string | null;
+  collection_time?: string | null;
+  ordered_test?: string | null;
 }
 
 // Form shape used by both Add and Edit modals
@@ -140,6 +148,119 @@ const SpecimenModal: React.FC<SpecimenModalProps> = ({ mode, initialData = EMPTY
   );
 };
 
+// --- FILE BARCODE UPLOAD COMPONENT ---
+interface SpecimenIntakeProps {
+  onAddSpecimen: (data: SpecimenFormData) => Promise<void>;
+  onSelectSpecimen: (specimen: Specimen & { patient_name: string; patient_mrn: string; patient_dob: string }) => void;
+}
+
+function generateDummySpecimen(barcode: string) {
+  const sampleTypes = ["Blood", "Urine", "Swab", "Saliva"];
+  const statuses: Specimen['status'][] = ["Pending", "In Progress", "Incubating", "Awaiting AST", "Completed", "Flagged"];
+  const names = ["Alice Smith", "Bob Johnson", "Charlie Lee", "Dana Kim", "Evan Wright"];
+
+  const rand = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+  const randomDate = () =>
+    new Date(+(new Date()) - Math.floor(Math.random() * 10000000000))
+      .toISOString()
+      .split('T')[0];
+
+  return {
+    specimen_code: barcode,
+    sample_type: rand(sampleTypes),
+    status: rand(statuses),
+    location: `Rack ${Math.ceil(Math.random() * 5)}, Slot ${Math.ceil(Math.random() * 10)}`,
+    patient_name: rand(names),
+    patient_mrn: `${Math.floor(100000 + Math.random() * 900000)}`,
+    patient_dob: randomDate(),
+  };
+}
+
+const SpecimenIntake: React.FC<SpecimenIntakeProps> = ({ onAddSpecimen, onSelectSpecimen }) => {
+  const [barcode, setBarcode] = useState<string>('');
+  const [file, setFile] = useState<File | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    setFile(f || null);
+    setBarcode('');
+    setError(null);
+  };
+
+  async function decodeBarcodeFromFile(file: File): Promise<string> {
+    const img = await loadImage(file);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, 0, 0);
+
+    const reader = new BrowserMultiFormatReader();
+    const result = reader.decodeFromCanvas(canvas);
+    return result.getText();
+  }
+
+  const handleDecode = async () => {
+    if (!file) return setError('Please select an image file.');
+    try {
+      const decodedBarcode = await decodeBarcodeFromFile(file);
+      setBarcode(decodedBarcode);
+
+      const dummy = generateDummySpecimen(decodedBarcode);
+
+      await onAddSpecimen({
+        specimen_code: dummy.specimen_code,
+        sample_type: dummy.sample_type,
+        status: dummy.status as Specimen['status'],
+        location: dummy.location,
+      });
+
+      onSelectSpecimen({
+        id: Math.floor(Math.random() * 100000),
+        specimen_code: dummy.specimen_code,
+        sample_type: dummy.sample_type,
+        status: dummy.status as Specimen['status'],
+        location: dummy.location,
+        patient_name: dummy.patient_name,
+        patient_mrn: dummy.patient_mrn,
+        patient_dob: dummy.patient_dob,
+      });
+
+    } catch (err) {
+      console.error(err);
+      setError('Failed to decode barcode from file.');
+    }
+  };
+
+  return (
+    <div className="d-flex flex-column gap-2">
+      <input type="file" accept="image/*" onChange={handleFileChange} />
+      <button className="btn btn-sm btn-primary w-25" onClick={handleDecode} disabled={!file}>
+        Decode Barcode
+      </button>
+      {barcode && <div className="alert alert-success p-2">Decoded Barcode: {barcode}</div>}
+      {error && <div className="alert alert-danger p-2">{error}</div>}
+    </div>
+  );
+};
+
+// Helper to load file as HTMLImageElement
+function loadImage(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+// --- DASHBOARD ---
 const Dashboard: React.FC = () => {
   const [specimens, setSpecimens] = useState<Specimen[]>([]);
   const [selected, setSelected] = useState<Specimen | null>(null);
@@ -158,7 +279,6 @@ const Dashboard: React.FC = () => {
         const res = await fetch(`${API_URL}/specimens/`);
         if (!res.ok) throw new Error(`Server error ${res.status}`);
         const data = await res.json();
-        // Normalize backend fields to frontend state
         const normalized: Specimen[] = data.map((s: any) => ({
           id: s.specimen_id,
           specimen_code: s.specimen_code,
@@ -206,7 +326,6 @@ const Dashboard: React.FC = () => {
         throw new Error(d?.detail ?? `Server error ${res.status}`);
       }
       const created = await res.json();
-      // normalize
       const newSpecimen: Specimen = {
         id: created.specimen_id,
         specimen_code: created.specimen_code,
@@ -298,6 +417,35 @@ const Dashboard: React.FC = () => {
       </nav>
 
       <div className="container-fluid flex-grow-1 p-4" style={{ backgroundColor: '#c9d7e0' }}>
+        {/* Specimen Intake Form (File Barcode Upload) */}
+        <div className="card shadow-sm border-0 mb-4 p-3">
+          <h4 className="fw-bold text-primary mb-3">➕ Quick Specimen Intake</h4>
+          <SpecimenIntake
+            onAddSpecimen={async (data) => {
+              // create a new specimen object
+              const newSpecimen: Specimen & { patient_name: string; patient_mrn: string; patient_dob: string } = {
+                id: Math.floor(Math.random() * 100000),
+                specimen_code: data.specimen_code,
+                sample_type: data.sample_type,
+                status: data.status,
+                location: data.location,
+                patient_name: "Dummy Name",
+                patient_mrn: `${Math.floor(100000 + Math.random() * 900000)}`,
+                patient_dob: "2000-01-01",
+              };
+
+              // update the specimens state
+              setSpecimens(prev => [newSpecimen, ...prev]);
+
+              // select it so details sidebar updates
+              setSelected(newSpecimen);
+            }}
+            onSelectSpecimen={(specimen) => {
+              setSelected(specimen);
+            }}
+          />
+        </div>
+
         <div className="main-page-border" style={{ margin: 20, justifyContent: 'center' }}>
           <h2 className="mb-4" style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#2c5282' }}>Specimen Overview</h2>
           <hr />
@@ -397,6 +545,13 @@ const Dashboard: React.FC = () => {
                       <p className="fw-bold">Sample Type: {selected.sample_type ?? "—"}</p>
                       <div className={`badge bg-${getStatusColor(selected.status)} mb-3`}>{selected.status}</div>
                       <p className="small"><strong>Storage:</strong> {selected.location ?? "—"}</p>
+
+                    {/* --- Patient Details --- */}
+                      {selected.patient_name && <p className="small"><strong>Patient:</strong> {selected.patient_name}</p>}
+                      {selected.patient_mrn && <p className="small"><strong>MRN:</strong> {selected.patient_mrn}</p>}
+                      {selected.patient_dob && <p className="small"><strong>DOB:</strong> {selected.patient_dob}</p>}
+                      {selected.collection_time && <p className="small"><strong>Collection Time:</strong> {selected.collection_time}</p>}
+                      {selected.ordered_test && <p className="small"><strong>Ordered Test:</strong> {selected.ordered_test}</p>}
                     </>
                   )}
                 </div>
