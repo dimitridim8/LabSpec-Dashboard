@@ -12,8 +12,8 @@ class SpecimenBase(BaseModel):
     # patient fields
     patient_mrn: Optional[str] = None
     patient_name: Optional[str] = None
-    patient_dob: Optional[datetime] = None
-    collection_time: Optional[datetime] = None
+    patient_dob: Optional[str] = None
+    collection_time: Optional[str] = None
 
 
 class SpecimenCreate(SpecimenBase):

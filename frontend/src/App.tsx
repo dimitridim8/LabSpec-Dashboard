@@ -150,32 +150,36 @@ const SpecimenModal: React.FC<SpecimenModalProps> = ({ mode, initialData = EMPTY
 // --- FILE BARCODE UPLOAD COMPONENT ---
 interface SpecimenIntakeProps {
   onAddSpecimen: (data: SpecimenFormData) => Promise<void>;
-  onSelectSpecimen: (specimen: Specimen & { patient_name: string; patient_mrn: string; patient_dob: string }) => void;
 }
 
-function generateDummySpecimen(barcode: string) {
+function generateDummySpecimen(barcode: string): {
+  specimen_code: string;
+  sample_type: string;
+  status: Specimen['status'];
+  location: string;
+} {
   const sampleTypes = ["Blood", "Urine", "Swab", "Saliva"];
-  const statuses: Specimen['status'][] = ["Pending", "In Progress", "Incubating", "Awaiting AST", "Completed", "Flagged"];
-  const names = ["Alice Smith", "Bob Johnson", "Charlie Lee", "Dana Kim", "Evan Wright"];
 
-  const rand = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
-  const randomDate = () =>
-    new Date(+(new Date()) - Math.floor(Math.random() * 10000000000))
-      .toISOString()
-      .split('T')[0];
+  const statuses: Specimen['status'][] = [
+    "Pending",
+    "In Progress",
+    "Incubating",
+    "Awaiting AST",
+    "Completed",
+    "Flagged"
+  ];
+
+  const rand = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
   return {
     specimen_code: barcode,
     sample_type: rand(sampleTypes),
     status: rand(statuses),
-    location: `Rack ${Math.ceil(Math.random() * 5)}, Slot ${Math.ceil(Math.random() * 10)}`,
-    patient_name: rand(names),
-    patient_mrn: `${Math.floor(100000 + Math.random() * 900000)}`,
-    patient_dob: randomDate(),
+    location: `Rack ${Math.ceil(Math.random() * 5)}, Slot ${Math.ceil(Math.random() * 10)}`
   };
 }
 
-const SpecimenIntake: React.FC<SpecimenIntakeProps> = ({ onAddSpecimen, onSelectSpecimen }) => {
+const SpecimenIntake: React.FC<SpecimenIntakeProps> = ({ onAddSpecimen }) => {
   const [barcode, setBarcode] = useState<string>('');
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -203,6 +207,7 @@ const SpecimenIntake: React.FC<SpecimenIntakeProps> = ({ onAddSpecimen, onSelect
 
   const handleDecode = async () => {
     if (!file) return setError('Please select an image file.');
+
     try {
       const decodedBarcode = await decodeBarcodeFromFile(file);
       setBarcode(decodedBarcode);
@@ -212,19 +217,8 @@ const SpecimenIntake: React.FC<SpecimenIntakeProps> = ({ onAddSpecimen, onSelect
       await onAddSpecimen({
         specimen_code: dummy.specimen_code,
         sample_type: dummy.sample_type,
-        status: dummy.status as Specimen['status'],
+        status: dummy.status,
         location: dummy.location,
-      });
-
-      onSelectSpecimen({
-        id: Math.floor(Math.random() * 100000),
-        specimen_code: dummy.specimen_code,
-        sample_type: dummy.sample_type,
-        status: dummy.status as Specimen['status'],
-        location: dummy.location,
-        patient_name: dummy.patient_name,
-        patient_mrn: dummy.patient_mrn,
-        patient_dob: dummy.patient_dob,
       });
 
     } catch (err) {
@@ -236,10 +230,18 @@ const SpecimenIntake: React.FC<SpecimenIntakeProps> = ({ onAddSpecimen, onSelect
   return (
     <div className="d-flex flex-column gap-2">
       <input type="file" accept="image/*" onChange={handleFileChange} />
-      <button className="btn btn-sm btn-primary w-25" onClick={handleDecode} disabled={!file}>
+      <button
+        className="btn btn-sm btn-primary w-25"
+        onClick={handleDecode}
+        disabled={!file}
+      >
         Decode Barcode
       </button>
-      {barcode && <div className="alert alert-success p-2">Decoded Barcode: {barcode}</div>}
+      {barcode && (
+        <div className="alert alert-success p-2">
+          Decoded Barcode: {barcode}
+        </div>
+      )}
       {error && <div className="alert alert-danger p-2">{error}</div>}
     </div>
   );
@@ -482,7 +484,6 @@ const Dashboard: React.FC = () => {
                 alert(err instanceof Error ? err.message : "Failed to add specimen");
               }
             }}
-            onSelectSpecimen={(specimen) => setSelected(specimen)}
           />
         </div>
 
