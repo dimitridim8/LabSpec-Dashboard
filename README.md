@@ -30,12 +30,23 @@ pip install supabase
 
 # run the backend server
 uvicorn app.main:app --reload --port 8000
+```
 
+### Terminal 2 — Frontend Setup + Run
+
+```bash
 # go to frontend folder
 cd frontend
 
+# create frontend environment variables
+# (create frontend/.env manually with the following contents)
+# VITE_SUPABASE_URL=...
+# VITE_SUPABASE_ANON_KEY=...
+# VITE_API_URL=http://localhost:8000
+
 # install frontend dependencies
 npm install
+npm install @supabase/supabase-js
 
 # start the frontend dev server
 npm run dev
