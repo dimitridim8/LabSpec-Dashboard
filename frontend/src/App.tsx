@@ -266,6 +266,8 @@ const Dashboard: React.FC = () => {
   const [specimens, setSpecimens] = useState<Specimen[]>([]);
   const [selected, setSelected] = useState<Specimen | null>(null);
   const [filter, setFilter] = useState<string>('All');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [locationFilter, setLocationFilter] = useState<string>('All');
 
   const [modalMode, setModalMode] = useState<'add' | 'edit' | null>(null);
   const [saving, setSaving] = useState(false);
@@ -307,10 +309,32 @@ const Dashboard: React.FC = () => {
     "Completed": specimens.filter(s => s.status === "Completed").length,
   }), [specimens]);
 
+  const uniqueLocations = useMemo(() => {
+    return [...new Set(specimens.map(s => s.location).filter(Boolean))] as string[];
+  }, [specimens]);
+
   const filteredSpecimens = useMemo(() => {
-    if (filter === 'All') return specimens;
-    return specimens.filter(s => s.status === filter);
-  }, [specimens, filter]);
+  return specimens.filter(s => {
+
+    // Status filter (your existing buttons)
+    const matchesStatus =
+      filter === 'All' || s.status === filter;
+
+    // Search filter
+    const search = searchTerm.toLowerCase();
+    const matchesSearch =
+      !search ||
+      (s.specimen_code ?? String(s.id)).toLowerCase().includes(search) ||
+      (s.sample_type ?? '').toLowerCase().includes(search) ||
+      (s.location ?? '').toLowerCase().includes(search);
+
+    // Location filter
+    const matchesLocation =
+      locationFilter === 'All' || s.location === locationFilter;
+
+    return matchesStatus && matchesSearch && matchesLocation;
+  });
+}, [specimens, filter, searchTerm, locationFilter]);
 
   // Add new specimen (POST)
   const handleAdd = async (data: SpecimenFormData) => {
@@ -503,65 +527,115 @@ const Dashboard: React.FC = () => {
           </div>
 
           <div className="row">
-            {/* Specimen List */}
-            <div className="col-lg-9">
-              <div className="card shadow-sm border-0 p-3">
-                <div className="d-flex align-items-center justify-content-between mb-3">
-                  <div className="d-flex gap-2">
-                    {["All", "Pending", "In Progress", "Awaiting AST", "Completed"].map(f => (
+  {/* Specimen List */}
+  <div className="col-lg-9">
+    <div className="card shadow-sm border-0 p-3">
+
+      <div className="d-flex flex-wrap align-items-center justify-content-between mb-3">
+
+        <div className="d-flex flex-wrap gap-2 align-items-center">
+
+          {/* Status Buttons */}
+          {["All", "Pending", "In Progress", "Awaiting AST", "Completed"].map(f => (
+            <button
+              key={f}
+              className={`btn btn-sm ${filter === f ? "btn-primary" : "btn-outline-secondary"}`}
+              onClick={() => setFilter(f)}
+            >
+              {f}
+            </button>
+          ))}
+
+          {/* Search Bar */}
+          <input
+            type="text"
+            className="form-control form-control-sm"
+            placeholder="Search ID, sample type, location..."
+            style={{ width: '220px' }}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+
+          {/* Location Filter */}
+          <select
+            className="form-select form-select-sm"
+            style={{ width: '160px' }}
+            value={locationFilter}
+            onChange={(e) => setLocationFilter(e.target.value)}
+          >
+            <option value="All">All Locations</option>
+            {uniqueLocations.map(loc => (
+              <option key={loc} value={loc}>{loc}</option>
+            ))}
+          </select>
+
+          {/* Clear Filters */}
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            onClick={() => {
+              setFilter('All');
+              setSearchTerm('');
+              setLocationFilter('All');
+            }}
+          >
+            Clear
+          </button>
+
+        </div>
+
+        {/* New Specimen Button */}
+        <button
+          className="btn btn-sm btn-primary d-flex align-items-center gap-1 fw-semibold"
+          onClick={() => { setSaveError(null); setModalMode('add'); }}
+          title="Add new specimen"
+        >
+          <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>+</span> New Specimen
+        </button>
+
+      </div>
+            <table className="table table-hover">
+              <thead className="table-light">
+                <tr>
+                  <th>Specimen ID</th>
+                  <th>Sample Type</th>
+                  <th>Status</th>
+                  <th>Location</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSpecimens.map(s => (
+                  <tr key={s.id} onClick={() => setSelected(s)} style={{ cursor: "pointer" }}>
+                    <td>{s.specimen_code ?? s.id}</td>
+                    <td>{s.sample_type ?? "—"}</td>
+                    <td>
+                      <span className={`badge bg-${getStatusColor(s.status)}`}>
+                        {s.status}
+                      </span>
+                    </td>
+                    <td>{s.location ?? "—"}</td>
+                    <td>
                       <button
-                        key={f}
-                        className={`btn btn-sm ${filter === f ? "btn-primary" : "btn-outline-secondary"}`}
-                        onClick={() => setFilter(f)}
-                      >{f}</button>
-                    ))}
-                  </div>
-                  <button
-                    className="btn btn-sm btn-primary d-flex align-items-center gap-1 fw-semibold"
-                    onClick={() => { setSaveError(null); setModalMode('add'); }}
-                    title="Add new specimen"
-                  >
-                    <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>+</span> New Specimen
-                  </button>
-                </div>
+                        className="btn btn-outline-primary btn-sm"
+                        onClick={e => { e.stopPropagation(); setSelected(s); }}
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredSpecimens.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="text-center text-muted py-4">
+                      No specimens found for this filter.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
 
-                <table className="table table-hover">
-                  <thead className="table-light">
-                    <tr>
-                      <th>Specimen ID</th>
-                      <th>Sample Type</th>
-                      <th>Status</th>
-                      <th>Location</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredSpecimens.map(s => (
-                      <tr key={s.id} onClick={() => setSelected(s)} style={{ cursor: "pointer" }}>
-                        <td>{s.specimen_code ?? s.id}</td>
-                        <td>{s.sample_type ?? "—"}</td>
-                        <td><span className={`badge bg-${getStatusColor(s.status)}`}>{s.status}</span></td>
-                        <td>{s.location ?? "—"}</td>
-                        <td>
-                          <button
-                            className="btn btn-outline-primary btn-sm"
-                            onClick={e => { e.stopPropagation(); setSelected(s); }}
-                          >
-                            View
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredSpecimens.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="text-center text-muted py-4">No specimens found for this filter.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
+          </div>
+        </div>
             {/* Details Sidebar */}
             <div className="col-lg-3">
               <div className="card shadow-sm border-0 h-100 p-3">
