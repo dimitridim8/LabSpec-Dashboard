@@ -273,6 +273,12 @@ const Dashboard: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState<{ sender: 'user' | 'bot'; text: string }[]>([
+    { sender: 'bot', text: 'Hello. I am LabBot. Ask me about specimen status, location, or details.' }
+  ]);
+  const [chatMinimized, setChatMinimized] = useState(false);
+
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
   // Load specimens from backend
@@ -324,6 +330,7 @@ const Dashboard: React.FC = () => {
     const search = searchTerm.toLowerCase();
     const matchesSearch =
       !search ||
+      s.id?.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
       (s.specimen_code ?? String(s.id)).toLowerCase().includes(search) ||
       (s.sample_type ?? '').toLowerCase().includes(search) ||
       (s.location ?? '').toLowerCase().includes(search);
@@ -437,6 +444,78 @@ const Dashboard: React.FC = () => {
   const editInitialData: SpecimenFormData | undefined = selected
     ? { specimen_code: selected.specimen_code ?? String(selected.id), sample_type: selected.sample_type ?? '', status: selected.status, location: selected.location ?? '' }
     : undefined;
+
+  // chatbot
+  const handleChatSubmit = () => {
+  if (!chatInput.trim()) return;
+
+  const userMessage = chatInput.trim();
+  const lower = userMessage.toLowerCase();
+
+  setChatMessages(prev => [...prev, { sender: 'user', text: userMessage }]);
+
+  let response =
+    "I'm sorry, I can only assist with specimen status, location, and basic workflow questions.";
+
+  // 🔎 Find specimen by code OR by sample type
+  const foundSpecimen = specimens.find(s =>
+    lower.includes(s.specimen_code?.toLowerCase() ?? "") ||
+    lower.includes(s.sample_type?.toLowerCase() ?? "")
+  );
+
+  // --- STATUS ---
+  if (lower.includes('status') && foundSpecimen) {
+    response = `Specimen ${foundSpecimen.specimen_code} is currently ${foundSpecimen.status}.`;
+  }
+
+  // --- LOCATION ---
+  else if ((lower.includes('where') || lower.includes('location')) && foundSpecimen) {
+    response = `Specimen ${foundSpecimen.specimen_code} is stored at ${foundSpecimen.location ?? "an unspecified location"}.`;
+  }
+
+  // --- FULL DETAILS ---
+  else if (lower.includes('details') && foundSpecimen) {
+    response =
+      `Specimen ${foundSpecimen.specimen_code}:
+      Status: ${foundSpecimen.status}
+      Location: ${foundSpecimen.location ?? "N/A"}
+      Sample Type: ${foundSpecimen.sample_type ?? "N/A"}`;
+  }
+
+  // --- SUPERVISOR SUMMARY ---
+  else if (lower.includes('summary') && foundSpecimen) {
+    response =
+      `Specimen ${foundSpecimen.specimen_code} summary:
+      Status: ${foundSpecimen.status}
+      Location: ${foundSpecimen.location ?? "N/A"}
+      MRN: ${foundSpecimen.patient_mrn ?? "N/A"}`;
+  }
+
+  // --- VOLUME LOOKUP ---
+  else if (lower.includes('ml') || lower.includes('volume')) {
+    if (lower.includes('blood')) response = "Required volume for Blood specimen: 5 mL.";
+    else if (lower.includes('urine')) response = "Required volume for Urine specimen: 10 mL.";
+    else if (lower.includes('swab')) response = "Swab specimens require proper collection medium.";
+    else response = "Please specify specimen type for volume requirements.";
+  }
+
+  // --- Not Found ---
+  else if (!foundSpecimen) {
+    response = "No matching specimen was found in the system.";
+  }
+
+  setChatMessages(prev => [...prev, { sender: 'bot', text: response }]);
+  setChatInput('');
+};
+
+const handleClearChat = () => {
+  setChatMessages([
+    {
+      sender: 'bot',
+      text: 'Hello. I am LabBot. Ask me about specimen status, location, or details.'
+    }
+  ]);
+};
 
   return (
     <div className="min-vh-100 d-flex flex-column">
@@ -678,18 +757,85 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
       
-      {/*Floating LabBot */}
-      <div className="position-fixed bottom-0 end-0 m-4 shadow-lg card" style={{ width: '250px', borderRadius: '15px 15px 0 0' }}>
-        <div className="card-header bg-primary text-white d-flex justify-content-between">
+      {/* Floating LabBot */}
+      <div
+        className="position-fixed bottom-0 end-0 m-4 shadow-lg card"
+        style={{ width: '320px', borderRadius: '15px 15px 0 0' }}
+      >
+        {/* Header */}
+        <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
           <span>🤖 LabBot</span>
+
+          <div className="d-flex gap-1 align-items-center">
+            {/* Clear Chat button: only visible when not minimized */}
+            {!chatMinimized && (
+              <button
+                className="btn btn-sm btn-light"
+                title="Clear chat"
+                onClick={handleClearChat}
+              >
+                Clear
+              </button>
+            )}
+
+            {/* Minimize button: always visible */}
+            <button
+              className="btn btn-sm btn-light"
+              style={{ padding: '2px 8px' }}
+              onClick={() => setChatMinimized(!chatMinimized)}
+            >
+              {chatMinimized ? "▲" : "-"}
+            </button>
+          </div>
         </div>
-        <div className="p-3 bg-light small">How can I assist you today?</div>
-        <div className="chat-bot-sample-text">
-          <input type="text" id="chat-box-user-input" style={{ backgroundColor: "white", color: "black", width: "auto" }} />
-          <label htmlFor="chat-box-user-input"></label>
-          <p></p>
-          <p></p>
-        </div>
+
+        {/* Body (Hidden When Minimized) */}
+        {!chatMinimized && (
+          <>
+            <div
+              className="p-3 bg-light"
+              style={{ height: '250px', overflowY: 'auto' }}
+            >
+              {chatMessages.map((msg, i) => (
+                <div
+                  key={i}
+                  className={`mb-2 ${msg.sender === 'user' ? 'text-end' : 'text-start'}`}
+                >
+                  <span
+                    className={`badge text-wrap ${
+                      msg.sender === 'user' ? 'bg-secondary' : 'bg-primary'
+                    }`}
+                    style={{
+                      whiteSpace: 'normal',
+                      wordBreak: 'break-word',
+                      maxWidth: '100%',
+                      display: 'inline-block'
+                    }}
+                  >
+                    {msg.text}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-2 border-top d-flex gap-2">
+              <input
+                type="text"
+                className="form-control form-control-sm"
+                placeholder="Ask about specimen..."
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleChatSubmit()}
+              />
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={handleChatSubmit}
+              >
+                Send
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Modals */}
