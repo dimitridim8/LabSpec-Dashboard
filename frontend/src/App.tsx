@@ -2,6 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import beaker from './assets/images/beaker-image.png';
 import { BrowserMultiFormatReader } from '@zxing/browser';
+import { supabase } from "./supabaseClient";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Profile from "./pages/Profile";
+import Help from "./pages/Help";
+import TopNav from "./components/TopNav";
 
 interface Specimen {
   id: number;
@@ -262,7 +268,12 @@ function loadImage(file: File): Promise<HTMLImageElement> {
 }
 
 // --- DASHBOARD ---
-const Dashboard: React.FC = () => {
+  const Dashboard: React.FC<{
+    userId: string;
+    fallbackEmail?: string;
+    onNavigate: (page: "dashboard" | "profile" | "help") => void;
+  }> = ({ userId, fallbackEmail, onNavigate }) => {
+
   const [specimens, setSpecimens] = useState<Specimen[]>([]);
   const [selected, setSelected] = useState<Specimen | null>(null);
   const [filter, setFilter] = useState<string>('All');
@@ -519,11 +530,13 @@ const handleClearChat = () => {
 
   return (
     <div className="min-vh-100 d-flex flex-column">
-      {/* Top Nav */}
-      <nav className="navbar navbar-dark shadow-sm p-3" style={{ backgroundColor: '#2c5282' }}>
-        <span className="navbar-brand mb-0 h1"><b>LabSpec</b> Dashboard</span>
-        <div className="text-white">Welcome, Dr. Smith</div>
-      </nav>
+      <TopNav
+        title="Dashboard"
+        userId={userId}
+        fallbackEmail={fallbackEmail}
+        activePage="dashboard"
+        onNavigate={onNavigate}
+      />
 
       <div className="container-fluid flex-grow-1 p-4" style={{ backgroundColor: '#c9d7e0' }}>
         {/* Specimen Intake Form (File Barcode Upload) */}
@@ -851,7 +864,96 @@ const handleClearChat = () => {
   );
 };
 
-export default Dashboard;
+//export default Dashboard;
+
+export default function App() {
+  const [session, setSession] = useState<any>(null);
+  const [showRegister, setShowRegister] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [activePage, setActivePage] = useState<"dashboard" | "profile" | "help">("dashboard");
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setLoading(false);
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      if (!s) setActivePage("dashboard");
+    });
+
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setLoading(false);
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+    });
+
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  if (loading) return <div style={{ padding: 20 }}>Loading...</div>;
+
+  // Not logged in → show login/register
+  if (!session) {
+    return (
+      <div>
+        {showRegister ? (
+          <Register onSuccess={() => setShowRegister(false)} />
+        ) : (
+          <Login />
+        )}
+        <div style={{ textAlign: "center", marginTop: 12 }}>
+          <button
+            onClick={() => setShowRegister((v) => !v)}
+            style={{ border: "none", background: "transparent", color: "#2c5282" }}
+          >
+            {showRegister ? "Have an account? Login" : "No account? Register"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const userId = session.user.id;
+  const email = session.user.email;
+
+  if (activePage === "profile") {
+    return (
+      <Profile
+        userId={userId}
+        fallbackEmail={email}
+        activePage="profile"
+        onNavigate={setActivePage}
+      />
+    );
+  }
+
+  if (activePage === "help") {
+    return (
+      <Help
+        userId={userId}
+        fallbackEmail={email}
+        activePage="help"
+        onNavigate={setActivePage}
+      />
+    );
+  }
+
+  return (
+    <Dashboard
+      userId={userId}
+      fallbackEmail={email}
+      onNavigate={setActivePage}
+    />
+  );
+}
 
 // Helper for badge colors
 function getStatusColor(status: Specimen['status']) {
