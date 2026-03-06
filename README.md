@@ -37,6 +37,12 @@ cd frontend
 # install frontend dependencies
 npm install
 
+# install barcode generation library
+npm install jsbarcode
+
+# install barcode scanning library
+npm install @zxing/browser
+
 # start the frontend dev server
 npm run dev
 
