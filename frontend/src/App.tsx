@@ -268,6 +268,7 @@ const Dashboard: React.FC = () => {
   const [filter, setFilter] = useState<string>('All');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [locationFilter, setLocationFilter] = useState<string>('All');
+  const [showAll, setShowAll] = useState(false);
 
   const [modalMode, setModalMode] = useState<'add' | 'edit' | null>(null);
   const [saving, setSaving] = useState(false);
@@ -342,6 +343,10 @@ const Dashboard: React.FC = () => {
     return matchesStatus && matchesSearch && matchesLocation;
   });
 }, [specimens, filter, searchTerm, locationFilter]);
+
+const displayedSpecimens = showAll
+  ? filteredSpecimens
+  : filteredSpecimens.slice(0, 8); // show first 8 by default
 
   // Add new specimen (POST)
   const handleAdd = async (data: SpecimenFormData) => {
@@ -594,6 +599,44 @@ const handleClearChat = () => {
           <h2 className="mb-4" style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#2c5282' }}>Specimen Overview</h2>
           <hr />
 
+          {/* Filters (outside table) */}
+          <div className="d-flex flex-wrap gap-2 mb-3">
+            {/* Search Bar */}
+          <input
+            type="text"
+            className="form-control form-control-sm"
+            placeholder="Search ID, sample type, location..."
+            style={{ width: '500px' }}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+
+          {/* Location Filter */}
+          <select
+            className="form-select form-select-sm"
+            style={{ width: '160px' }}
+            value={locationFilter}
+            onChange={(e) => setLocationFilter(e.target.value)}
+          >
+            <option value="All">All Locations</option>
+            {uniqueLocations.map(loc => (
+              <option key={loc} value={loc}>{loc}</option>
+            ))}
+          </select>
+
+          {/* Clear Filters */}
+          <button
+            className="btn btn-sm btn-outline-secondary"
+            onClick={() => {
+              setFilter('All');
+              setSearchTerm('');
+              setLocationFilter('All');
+            }}
+          >
+            Clear
+          </button>
+          </div>
+
           {/* Metric Cards */}
           <div className="row mb-4">
             {Object.entries(metrics).map(([key, value]) => (
@@ -625,41 +668,6 @@ const handleClearChat = () => {
             </button>
           ))}
 
-          {/* Search Bar */}
-          <input
-            type="text"
-            className="form-control form-control-sm"
-            placeholder="Search ID, sample type, location..."
-            style={{ width: '220px' }}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-
-          {/* Location Filter */}
-          <select
-            className="form-select form-select-sm"
-            style={{ width: '160px' }}
-            value={locationFilter}
-            onChange={(e) => setLocationFilter(e.target.value)}
-          >
-            <option value="All">All Locations</option>
-            {uniqueLocations.map(loc => (
-              <option key={loc} value={loc}>{loc}</option>
-            ))}
-          </select>
-
-          {/* Clear Filters */}
-          <button
-            className="btn btn-sm btn-outline-secondary"
-            onClick={() => {
-              setFilter('All');
-              setSearchTerm('');
-              setLocationFilter('All');
-            }}
-          >
-            Clear
-          </button>
-
         </div>
 
         {/* New Specimen Button */}
@@ -683,7 +691,7 @@ const handleClearChat = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredSpecimens.map(s => (
+                {displayedSpecimens.map(s => (
                   <tr key={s.id} onClick={() => setSelected(s)} style={{ cursor: "pointer" }}>
                     <td>{s.specimen_code ?? s.id}</td>
                     <td>{s.sample_type ?? "—"}</td>
@@ -712,6 +720,16 @@ const handleClearChat = () => {
                 )}
               </tbody>
             </table>
+            {filteredSpecimens.length > 8 && (
+              <div className="text-center mt-2">
+                <button
+                  className="btn btn-sm btn-outline-primary"
+                  onClick={() => setShowAll(!showAll)}
+                >
+                  {showAll ? "Show Less" : "Show More"}
+                </button>
+              </div>
+            )}
 
           </div>
         </div>
