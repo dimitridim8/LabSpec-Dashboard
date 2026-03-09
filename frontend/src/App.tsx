@@ -733,9 +733,17 @@ const handleClearChat = () => {
 
           </div>
         </div>
+
             {/* Details Sidebar */}
             <div className="col-lg-3">
-              <div className="card shadow-sm border-0 h-100 p-3">
+              <div
+                className="card shadow-sm border-0 p-3"
+                style={{
+                  alignSelf: 'flex-start',
+                  borderLeft: `4px solid var(--bs-${selected ? getStatusColor(selected.status) : 'secondary'})`,
+                  transition: 'border-color 0.3s ease',
+                }}
+              >
                 <div className="d-flex align-items-center justify-content-between border-bottom pb-2">
                   <h6 className="text-muted mb-0">Specimen Details</h6>
                   <button
@@ -750,25 +758,104 @@ const handleClearChat = () => {
                 </div>
                 <div className="mt-3">
                   {!selected ? (
-                    <p className="text-muted small">Click a specimen row to view details.</p>
+                    <div className="text-center text-muted py-4 d-flex flex-column align-items-center gap-2">
+                      <img src={beaker} alt="No specimen selected" style={{ width: 48, opacity: 0.3 }} />
+                      <p className="small mb-0">Select a specimen row<br />to view its details.</p>
+                    </div>
                   ) : (
                     <>
                       <p className="small mb-1 text-muted">ID: {selected.specimen_code ?? selected.id}</p>
-                      <p className="fw-bold">Sample Type: {selected.sample_type ?? "—"}</p>
+                      <p className="fw-bold mb-1">Sample Type: {selected.sample_type ?? "—"}</p>
                       <div className={`badge bg-${getStatusColor(selected.status)} mb-3`}>{selected.status}</div>
                       <p className="small"><strong>Storage:</strong> {selected.location ?? "—"}</p>
 
-                    {/* --- Patient Details --- */}
-                      {selected.patient_name && <p className="small"><strong>Patient:</strong> {selected.patient_name}</p>}
-                      {selected.patient_mrn && <p className="small"><strong>MRN:</strong> {selected.patient_mrn}</p>}
-                      {selected.patient_dob && <p className="small"><strong>DOB:</strong> {selected.patient_dob}</p>}
-                      {selected.collection_time && <p className="small"><strong>Collection Time:</strong> {selected.collection_time}</p>}
+                      {/* --- Patient Details --- */}
+                      {(selected.patient_name || selected.patient_mrn || selected.patient_dob || selected.collection_time) && (
+                        <>
+                          <div className="d-flex align-items-center gap-2 my-2">
+                            <hr className="flex-grow-1 my-0" />
+                            <span className="text-muted" style={{ fontSize: '0.7rem', whiteSpace: 'nowrap' }}>PATIENT INFO</span>
+                            <hr className="flex-grow-1 my-0" />
+                          </div>
+                          <div className="rounded p-2" style={{ backgroundColor: '#f0f4f8' }}>
+                            {selected.patient_name && <p className="small mb-1"><strong>Patient:</strong> {selected.patient_name}</p>}
+                            {selected.patient_mrn && <p className="small mb-1"><strong>MRN:</strong> {selected.patient_mrn}</p>}
+                            {selected.patient_dob && <p className="small mb-1"><strong>DOB:</strong> {selected.patient_dob}</p>}
+                            {selected.collection_time && (
+                              <p className="small mb-0">
+                                <strong>Collected:</strong>{' '}
+                                {new Date(selected.collection_time).toLocaleString(undefined, {
+                                  year: 'numeric', month: 'short', day: 'numeric',
+                                  hour: '2-digit', minute: '2-digit'
+                                })}
+                              </p>
+                            )}
+                          </div>
+                        </>
+                      )}
                     </>
                   )}
                 </div>
-                <button className="btn btn-danger w-100 mt-auto" disabled={!selected || saving} onClick={handleMarkCompleted}>
-                  {saving ? 'Saving…' : 'Mark as Completed'}
-                </button>
+                {/* Inline status change */}
+                {selected && (
+                  <div className="mt-3">
+                    <label className="form-label fw-semibold small text-muted mb-1">Update Status</label>
+                    <select
+                      className="form-select form-select-sm"
+                      value={selected.status}
+                      onChange={async (e) => {
+                        const newStatus = e.target.value as Specimen['status'];
+                        setSaving(true); setSaveError(null);
+                        try {
+                          const res = await fetch(`${API_URL}/specimens/${selected.id}/`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ current_status: newStatus }),
+                          });
+                          if (!res.ok) {
+                            const d = await res.json().catch(() => ({}));
+                            throw new Error(d?.detail ?? `Server error ${res.status}`);
+                          }
+                          const updated = await res.json();
+                          const normalized: Specimen = {
+                            id: updated.specimen_id,
+                            specimen_code: updated.specimen_code,
+                            sample_type: updated.specimen_type,
+                            status: updated.current_status,
+                            location: updated.storage_location,
+                            patient_name: updated.patient_name,
+                            patient_mrn: updated.patient_mrn,
+                            patient_dob: updated.patient_dob,
+                            collection_time: updated.collection_time,
+                          };
+                          setSpecimens(prev => prev.map(s => s.id === normalized.id ? normalized : s));
+                          setSelected(normalized);
+                        } catch (err: unknown) {
+                          setSaveError(err instanceof Error ? err.message : 'Failed to update status.');
+                        } finally { setSaving(false); }
+                      }}
+                      disabled={saving}
+                    >
+                      {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {/* Mark as Completed with tooltip when already completed */}
+                <div
+                  className="mt-3"
+                  title={selected?.status === 'Completed' ? 'This specimen is already marked as completed.' : ''}
+                  style={{ cursor: selected?.status === 'Completed' ? 'not-allowed' : 'default' }}
+                >
+                  <button
+                    className="btn btn-danger w-100"
+                    disabled={!selected || saving || selected?.status === 'Completed'}
+                    onClick={handleMarkCompleted}
+                    style={{ pointerEvents: selected?.status === 'Completed' ? 'none' : 'auto' }}
+                  >
+                    {saving ? 'Saving…' : selected?.status === 'Completed' ? '✓ Already Completed' : 'Mark as Completed'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
