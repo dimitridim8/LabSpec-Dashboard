@@ -5,6 +5,7 @@ import { BrowserMultiFormatReader } from '@zxing/browser';
 import { supabase } from "./supabaseClient";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import { Home } from "./pages/Home";
 import Profile from "./pages/Profile";
 import Help from "./pages/Help";
 import Organization from "./pages/Organization";
@@ -834,7 +835,7 @@ type UserRole = "admin" | "lab_tech";
 
 export default function App() {
   const [session, setSession] = useState<any>(null);
-  const [showRegister, setShowRegister] = useState(false);
+  const [currentView, setCurrentView] = useState<"home" | "login" | "register">("home");
   const [loading, setLoading] = useState(true);
   const [activePage, setActivePage] = useState<"dashboard" | "profile" | "help" | "org_setup" | "organization">("dashboard");
   const [userRole, setUserRole] = useState<UserRole>("lab_tech");
@@ -919,13 +920,24 @@ export default function App() {
 
   if (loading) return <div style={{ padding: 20 }}>Loading...</div>;
 
+  // Not logged in → show home/login/register flow
   if (!session) {
+    if (currentView === "home") {
+      return <Home onNavigate={setCurrentView} />;
+    }
     return (
-      <div>
-        {showRegister ? <Register onSuccess={() => setShowRegister(false)} /> : <Login />}
+      <div className="w-full max-w-md bg-white shadow-xl border-none" style={{ maxWidth: 400, margin: "80px auto", padding: 20, backgroundColor: "#f8f9fa", borderRadius: 12 }}>
+        {currentView === "register" ? (
+          <Register onSuccess={() => setCurrentView("home")} />
+        ) : (
+          <Login onNavigate={setCurrentView} />
+        )}
         <div style={{ textAlign: "center", marginTop: 12 }}>
-          <button onClick={() => setShowRegister((v) => !v)} style={{ border: "none", background: "transparent", color: "#2c5282" }}>
-            {showRegister ? "Have an account? Login" : "No account? Register"}
+          <button
+            onClick={() => setCurrentView(currentView === "register" ? "login" : "register")}
+            style={{ border: "none", background: "transparent", color: "#2c5282" }}
+          >
+            {currentView === "register" ? "Have an account? Login" : "No account? Register"}
           </button>
         </div>
       </div>
