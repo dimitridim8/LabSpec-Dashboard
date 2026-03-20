@@ -319,28 +319,57 @@ const SpecimenLabel: React.FC<SpecimenLabelProps> = ({ specimen }) => {
       <button
         className="btn btn-sm btn-outline-primary mt-2"
         onClick={() => {
-          const printContents = document.querySelector('.print-label')?.innerHTML;
+          const label = document.querySelector('.print-label')?.cloneNode(true) as HTMLElement;
 
-          const win = window.open('', '', 'width=400,height=600');
+          // remove button before printing
+          const btn = label?.querySelector('button');
+          if (btn) btn.remove();
+
+          const printContents = label?.innerHTML;
+
+          const win = window.open('', '_blank');
+
           if (win && printContents) {
             win.document.write(`
               <html>
                 <head>
                   <title>Print Label</title>
                   <style>
-                    body {
+                    html, body {
+                      margin: 0;
+                      padding: 0;
+                      height: 100%;
+                      display: flex;
+                      justify-content: center;
+                      align-items: center;
                       font-family: Arial, sans-serif;
-                      padding: 10px;
+                    }
+
+                    .label-container {
+                      transform: scale(1.5);
+                      transform-origin: center;
+                    }
+
+                    @media print {
+                      .label-container {
+                        transform: scale(1.2);
+                      }
                     }
                   </style>
                 </head>
                 <body>
-                  ${printContents}
+                  <div class="label-container">
+                    ${printContents}
+                  </div>
                 </body>
               </html>
             `);
 
             win.document.close();
+
+            win.moveTo(0, 0);
+            win.resizeTo(screen.width, screen.height);
+
             win.focus();
             win.print();
             win.close();
@@ -894,7 +923,7 @@ const handleClearChat = () => {
                         </>
                       )}
 
-                      {/* ✅ --- SPECIMEN LABEL ADDED HERE --- */}
+                      {/* --- SPECIMEN LABEL --- */}
                       {selected && (
                         <div className="mt-4">
                           <h6 className="text-primary fw-bold">Specimen Label</h6>
