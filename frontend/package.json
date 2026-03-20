@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.99.3",
     "@zxing/browser": "^0.1.5",
     "bootstrap": "^5.3.8",
     "jsbarcode": "^3.12.3",

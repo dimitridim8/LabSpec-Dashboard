@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import beaker from './assets/images/beaker-image.png';
 import { BrowserMultiFormatReader } from '@zxing/browser';
@@ -8,6 +8,7 @@ import Register from "./pages/Register";
 import Profile from "./pages/Profile";
 import Help from "./pages/Help";
 import TopNav from "./components/TopNav";
+import JsBarcode from 'jsbarcode';
 
 interface Specimen {
   id: number;
@@ -266,6 +267,92 @@ function loadImage(file: File): Promise<HTMLImageElement> {
     img.src = url;
   });
 }
+
+interface SpecimenLabelProps {
+  specimen: {
+    specimen_code: string;
+    patient_name?: string;
+    patient_dob?: string;
+    patient_mrn?: string;
+    collection_time?: string;
+    sample_type?: string;
+    location?: string;
+    collector?: string;
+    test_requested?: string;
+  };
+}
+
+const SpecimenLabel: React.FC<SpecimenLabelProps> = ({ specimen }) => {
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  useEffect(() => {
+    if (svgRef.current) {
+      JsBarcode(svgRef.current, specimen.specimen_code, {
+        format: 'CODE128',
+        width: 2,
+        height: 50,
+        displayValue: true
+      });
+    }
+  }, [specimen.specimen_code]);
+
+  return (
+    <div
+      className="print-label"
+      style={{
+        border: '1px solid #000',
+        padding: 8,
+        width: 250,
+        fontFamily: 'Arial, sans-serif',
+        marginBottom: 10
+      }}
+    >
+      <svg ref={svgRef} />
+      <p style={{ margin: '4px 0', fontSize: '0.8rem' }}><strong>Patient:</strong> {specimen.patient_name}</p>
+      <p style={{ margin: '4px 0', fontSize: '0.8rem' }}><strong>DOB:</strong> {specimen.patient_dob}</p>
+      <p style={{ margin: '4px 0', fontSize: '0.8rem' }}><strong>MRN:</strong> {specimen.patient_mrn}</p>
+      <p style={{ margin: '4px 0', fontSize: '0.8rem' }}><strong>Collected:</strong> {specimen.collection_time}</p>
+      <p style={{ margin: '4px 0', fontSize: '0.8rem' }}><strong>Sample:</strong> {specimen.sample_type}</p>
+      <p style={{ margin: '4px 0', fontSize: '0.8rem' }}><strong>Location:</strong> {specimen.location}</p>
+      <p style={{ margin: '4px 0', fontSize: '0.8rem' }}><strong>Collector:</strong> {specimen.collector || '—'}</p>
+      <p style={{ margin: '4px 0', fontSize: '0.8rem' }}><strong>Test:</strong> {specimen.test_requested || '—'}</p>
+      <button
+        className="btn btn-sm btn-outline-primary mt-2"
+        onClick={() => {
+          const printContents = document.querySelector('.print-label')?.innerHTML;
+
+          const win = window.open('', '', 'width=400,height=600');
+          if (win && printContents) {
+            win.document.write(`
+              <html>
+                <head>
+                  <title>Print Label</title>
+                  <style>
+                    body {
+                      font-family: Arial, sans-serif;
+                      padding: 10px;
+                    }
+                  </style>
+                </head>
+                <body>
+                  ${printContents}
+                </body>
+              </html>
+            `);
+
+            win.document.close();
+            win.focus();
+            win.print();
+            win.close();
+          }
+        }}
+      >
+        Print Label
+      </button>
+    </div>
+  );
+};
+
 
 // --- DASHBOARD ---
   const Dashboard: React.FC<{
@@ -806,9 +893,30 @@ const handleClearChat = () => {
                           </div>
                         </>
                       )}
+
+                      {/* ✅ --- SPECIMEN LABEL ADDED HERE --- */}
+                      {selected && (
+                        <div className="mt-4">
+                          <h6 className="text-primary fw-bold">Specimen Label</h6>
+                          <SpecimenLabel
+                            specimen={{
+                              specimen_code: selected.specimen_code ?? String(selected.id),
+                              patient_name: selected.patient_name ?? undefined,
+                              patient_dob: selected.patient_dob ?? undefined,
+                              patient_mrn: selected.patient_mrn ?? undefined,
+                              collection_time: selected.collection_time ?? undefined,
+                              sample_type: selected.sample_type ?? undefined,
+                              location: selected.location ?? undefined,
+                              collector: 'AB',
+                              test_requested: 'Culture',
+                            }}
+                          />
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
+                   
                 {/* Inline status change */}
                 {selected && (
                   <div className="mt-3">
