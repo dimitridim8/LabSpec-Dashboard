@@ -272,7 +272,8 @@ function loadImage(file: File): Promise<HTMLImageElement> {
     userId: string;
     fallbackEmail?: string;
     onNavigate: (page: "dashboard" | "profile" | "help") => void;
-  }> = ({ userId, fallbackEmail, onNavigate }) => {
+    userRole: UserRole;
+  }> = ({ userId, fallbackEmail, onNavigate, userRole }) => {
 
   const [specimens, setSpecimens] = useState<Specimen[]>([]);
   const [selected, setSelected] = useState<Specimen | null>(null);
@@ -292,6 +293,8 @@ function loadImage(file: File): Promise<HTMLImageElement> {
   const [chatMinimized, setChatMinimized] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+  const canEdit = userRole === "admin";
 
   // Load specimens from backend
   useEffect(() => {
@@ -545,68 +548,66 @@ const handleClearChat = () => {
 
       <div className="container-fluid flex-grow-1 p-4" style={{ backgroundColor: '#c9d7e0' }}>
         {/* Specimen Intake Form (File Barcode Upload) */}
-        <div className="card shadow-sm border-0 mb-4 p-3">
-          <h4 className="fw-bold text-primary mb-3">➕ Quick Specimen Intake</h4>
-         <SpecimenIntake
-            onAddSpecimen={async (data) => {
-              // --- Generate random patient info ---
-              const names = ["Alice Smith", "Bob Johnson", "Charlie Lee", "Dana Kim", "Evan Wright"];
-              const randomDate = () =>
-                new Date(+new Date() - Math.floor(Math.random() * 10000000000))
-                  .toISOString()
-                  .split("T")[0];
+        {canEdit && (
+          <div className="card shadow-sm border-0 mb-4 p-3">
+            <h4 className="fw-bold text-primary mb-3">➕ Quick Specimen Intake</h4>
+            <SpecimenIntake
+              onAddSpecimen={async (data) => {
+                const names = ["Alice Smith", "Bob Johnson", "Charlie Lee", "Dana Kim", "Evan Wright"];
+                const randomDate = () =>
+                  new Date(+new Date() - Math.floor(Math.random() * 10000000000))
+                    .toISOString()
+                    .split("T")[0];
 
-              const patient_name = names[Math.floor(Math.random() * names.length)];
-              const patient_dob = randomDate();
-              const patient_mrn = `${Date.now()}${Math.floor(Math.random() * 1000)}`; // unique MRN
+                const patient_name = names[Math.floor(Math.random() * names.length)];
+                const patient_dob = randomDate();
+                const patient_mrn = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
-              // --- Prepare payload for backend ---
-              const payload = {
-                specimen_code: data.specimen_code,      // barcode from scan
-                specimen_type: data.sample_type || null,
-                current_status: data.status,
-                storage_location: data.location || null,
-                storage_condition: null,
-                patient_name,
-                patient_dob,
-                patient_mrn,
-              };
-
-              try {
-                const res = await fetch(`${API_URL}/specimens/`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(payload),
-                });
-                if (!res.ok) {
-                  const d = await res.json().catch(() => ({}));
-                  throw new Error(d?.detail ?? `Server error ${res.status}`);
-                }
-                const created = await res.json();
-
-                // --- Normalize and update frontend state ---
-                const newSpecimen: Specimen & { patient_name?: string; patient_dob?: string; patient_mrn?: string } = {
-                  id: created.specimen_id,
-                  specimen_code: created.specimen_code,
-                  sample_type: created.specimen_type,
-                  status: created.current_status,
-                  location: created.storage_location,
-                  patient_name: created.patient_name,
-                  patient_dob: created.patient_dob,
-                  patient_mrn: created.patient_mrn,
-                  collection_time: created.collection_time,
+                const payload = {
+                  specimen_code: data.specimen_code,
+                  specimen_type: data.sample_type || null,
+                  current_status: data.status,
+                  storage_location: data.location || null,
+                  storage_condition: null,
+                  patient_name,
+                  patient_dob,
+                  patient_mrn,
                 };
 
-                setSpecimens(prev => [newSpecimen, ...prev]);
-                setSelected(newSpecimen);
+                try {
+                  const res = await fetch(`${API_URL}/specimens/`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                  });
+                  if (!res.ok) {
+                    const d = await res.json().catch(() => ({}));
+                    throw new Error(d?.detail ?? `Server error ${res.status}`);
+                  }
+                  const created = await res.json();
 
-              } catch (err: unknown) {
-                console.error("Failed to add specimen:", err);
-                alert(err instanceof Error ? err.message : "Failed to add specimen");
-              }
-            }}
-          />
-        </div>
+                  const newSpecimen: Specimen & { patient_name?: string; patient_dob?: string; patient_mrn?: string } = {
+                    id: created.specimen_id,
+                    specimen_code: created.specimen_code,
+                    sample_type: created.specimen_type,
+                    status: created.current_status,
+                    location: created.storage_location,
+                    patient_name: created.patient_name,
+                    patient_dob: created.patient_dob,
+                    patient_mrn: created.patient_mrn,
+                    collection_time: created.collection_time,
+                  };
+
+                  setSpecimens(prev => [newSpecimen, ...prev]);
+                  setSelected(newSpecimen);
+                } catch (err: unknown) {
+                  console.error("Failed to add specimen:", err);
+                  alert(err instanceof Error ? err.message : "Failed to add specimen");
+                }
+              }}
+            />
+          </div>
+        )}
 
         <div className="main-page-border" style={{ margin: 20, justifyContent: 'center' }}>
           <h2 className="mb-4" style={{ fontSize: '1.75rem', fontWeight: 'bold', color: '#2c5282' }}>Specimen Overview</h2>
@@ -684,13 +685,15 @@ const handleClearChat = () => {
         </div>
 
         {/* New Specimen Button */}
-        <button
-          className="btn btn-sm btn-primary d-flex align-items-center gap-1 fw-semibold"
-          onClick={() => { setSaveError(null); setModalMode('add'); }}
-          title="Add new specimen"
-        >
-          <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>+</span> New Specimen
-        </button>
+        {canEdit && (
+          <button
+            className="btn btn-sm btn-primary d-flex align-items-center gap-1 fw-semibold"
+            onClick={() => { setSaveError(null); setModalMode('add'); }}
+            title="Add new specimen"
+          >
+            <span style={{ fontSize: '1.1rem', lineHeight: 1 }}>+</span> New Specimen
+          </button>
+        )}
 
       </div>
             <table className="table table-hover">
@@ -759,15 +762,17 @@ const handleClearChat = () => {
               >
                 <div className="d-flex align-items-center justify-content-between border-bottom pb-2">
                   <h6 className="text-muted mb-0">Specimen Details</h6>
-                  <button
-                    className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
-                    onClick={() => { setSaveError(null); setModalMode('edit'); }}
-                    disabled={!selected}
-                    title="Edit specimen"
-                    style={{ fontSize: '0.75rem', padding: '3px 10px' }}
-                  >
-                    Edit
-                  </button>
+                  {canEdit && (
+                    <button
+                      className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+                      onClick={() => { setSaveError(null); setModalMode('edit'); }}
+                      disabled={!selected}
+                      title="Edit specimen"
+                      style={{ fontSize: '0.75rem', padding: '3px 10px' }}
+                    >
+                      Edit
+                    </button>
+                  )}
                 </div>
                 <div className="mt-3">
                   {!selected ? (
@@ -810,7 +815,7 @@ const handleClearChat = () => {
                   )}
                 </div>
                 {/* Inline status change */}
-                {selected && (
+                {selected && canEdit && (
                   <div className="mt-3">
                     <label className="form-label fw-semibold small text-muted mb-1">Update Status</label>
                     <select
@@ -855,20 +860,22 @@ const handleClearChat = () => {
                 )}
 
                 {/* Mark as Completed with tooltip when already completed */}
-                <div
-                  className="mt-3"
-                  title={selected?.status === 'Completed' ? 'This specimen is already marked as completed.' : ''}
-                  style={{ cursor: selected?.status === 'Completed' ? 'not-allowed' : 'default' }}
-                >
-                  <button
-                    className="btn btn-danger w-100"
-                    disabled={!selected || saving || selected?.status === 'Completed'}
-                    onClick={handleMarkCompleted}
-                    style={{ pointerEvents: selected?.status === 'Completed' ? 'none' : 'auto' }}
+                {canEdit && (
+                  <div
+                    className="mt-3"
+                    title={selected?.status === 'Completed' ? 'This specimen is already marked as completed.' : ''}
+                    style={{ cursor: selected?.status === 'Completed' ? 'not-allowed' : 'default' }}
                   >
-                    {saving ? 'Saving…' : selected?.status === 'Completed' ? '✓ Already Completed' : 'Mark as Completed'}
-                  </button>
-                </div>
+                    <button
+                      className="btn btn-danger w-100"
+                      disabled={!selected || saving || selected?.status === 'Completed'}
+                      onClick={handleMarkCompleted}
+                      style={{ pointerEvents: selected?.status === 'Completed' ? 'none' : 'auto' }}
+                    >
+                      {saving ? 'Saving…' : selected?.status === 'Completed' ? '✓ Already Completed' : 'Mark as Completed'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -971,37 +978,55 @@ const handleClearChat = () => {
 
 //export default Dashboard;
 
+type UserRole = "admin" | "lab_tech";
+
 export default function App() {
   const [session, setSession] = useState<any>(null);
   const [showRegister, setShowRegister] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activePage, setActivePage] = useState<"dashboard" | "profile" | "help">("dashboard");
+  const [userRole, setUserRole] = useState<UserRole>("lab_tech");
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
+  supabase.auth.getSession().then(({ data }) => {
+    setSession(data.session);
+    setLoading(false);
+  });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-      if (!s) setActivePage("dashboard");
-    });
+  const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+    setSession(s);
+    if (!s) {
+      setActivePage("dashboard");
+      setUserRole("lab_tech");
+    }
+  });
 
-    return () => sub.subscription.unsubscribe();
-  }, []);
+  return () => sub.subscription.unsubscribe();
+}, []);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
+useEffect(() => {
+  const fetchUserRole = async () => {
+    if (!session?.user?.id) {
+      setUserRole("lab_tech");
+      return;
+    }
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-    });
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", session.user.id)
+      .single();
 
-    return () => sub.subscription.unsubscribe();
-  }, []);
+    if (error) {
+      console.error("Failed to fetch user role:", error.message);
+      setUserRole("lab_tech");
+      return;
+    }
+
+    setUserRole((data?.role as UserRole) || "lab_tech");
+  };
+
+  fetchUserRole();
+}, [session]);
 
   if (loading) return <div style={{ padding: 20 }}>Loading...</div>;
 
@@ -1036,6 +1061,8 @@ export default function App() {
         fallbackEmail={email}
         activePage="profile"
         onNavigate={setActivePage}
+        userRole={userRole}
+        setUserRole={setUserRole}
       />
     );
   }
@@ -1056,6 +1083,7 @@ export default function App() {
       userId={userId}
       fallbackEmail={email}
       onNavigate={setActivePage}
+      userRole={userRole}
     />
   );
 }
