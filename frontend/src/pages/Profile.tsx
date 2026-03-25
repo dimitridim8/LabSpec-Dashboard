@@ -2,11 +2,15 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import TopNav from "../components/TopNav";
 
+type UserRole = "admin" | "lab_tech";
+
 type ProfileProps = {
   userId: string;
   fallbackEmail?: string;
   activePage: "profile";
   onNavigate: (page: "dashboard" | "profile" | "help") => void;
+  userRole: UserRole;
+  setUserRole: (role: UserRole) => void;
 };
 
 type ProfileData = {
@@ -15,7 +19,21 @@ type ProfileData = {
   role: string;
 };
 
-const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) => {
+type ManagedUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+};
+
+const Profile: React.FC<ProfileProps> = ({
+  userId,
+  fallbackEmail,
+  activePage,
+  onNavigate,
+  userRole,
+  setUserRole,
+}) => {
   const [profile, setProfile] = useState<ProfileData>({
     name: "",
     email: "",
@@ -31,6 +49,12 @@ const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) 
   const [pwSaving, setPwSaving] = useState(false);
   const [pwMessage, setPwMessage] = useState<string | null>(null);
   const [pwError, setPwError] = useState<string | null>(null);
+
+  const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [roleSaveMessage, setRoleSaveMessage] = useState<string | null>(null);
+  const [roleSaveError, setRoleSaveError] = useState<string | null>(null);
+  const [savingRoleFor, setSavingRoleFor] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -61,6 +85,78 @@ const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) 
 
     fetchProfile();
   }, [userId]);
+
+  const fetchManagedUsers = async () => {
+    if (userRole !== "admin") return;
+
+    setUsersLoading(true);
+    setRoleSaveError(null);
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, name, email, role")
+      .order("email", { ascending: true });
+
+    if (error) {
+      console.error("Failed to fetch users:", error.message);
+      setRoleSaveError("Failed to load users.");
+      setUsersLoading(false);
+      return;
+    }
+
+    const normalizedUsers: ManagedUser[] = (data || []).map((user) => ({
+      id: user.id,
+      name: user.name ?? "",
+      email: user.email ?? "",
+      role: user.role === "admin" ? "admin" : "lab_tech",
+    }));
+
+    setManagedUsers(normalizedUsers);
+    setUsersLoading(false);
+  };
+
+  useEffect(() => {
+    if (userRole === "admin") {
+      fetchManagedUsers();
+    }
+  }, [userRole]);
+
+  const handleManagedRoleChange = (targetUserId: string, newRole: UserRole) => {
+    setManagedUsers((prev) =>
+      prev.map((user) =>
+        user.id === targetUserId ? { ...user, role: newRole } : user
+      )
+    );
+    setRoleSaveMessage(null);
+    setRoleSaveError(null);
+  };
+
+  const handleSaveManagedRole = async (targetUserId: string, newRole: UserRole) => {
+    setSavingRoleFor(targetUserId);
+    setRoleSaveMessage(null);
+    setRoleSaveError(null);
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ role: newRole })
+      .eq("id", targetUserId);
+
+    if (error) {
+      console.error("Failed to update role:", error.message);
+      setRoleSaveError("Failed to update user role.");
+      setSavingRoleFor(null);
+      return;
+    }
+
+    if (targetUserId === userId) {
+      setUserRole(newRole);
+      onNavigate("profile");
+    }
+
+    setRoleSaveMessage("User role updated successfully.");
+    setSavingRoleFor(null);
+    fetchManagedUsers();
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -127,7 +223,10 @@ const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) 
   };
 
   return (
-    <div className="min-vh-100 d-flex flex-column" style={{ backgroundColor: "#c9d7e0" }}>
+    <div
+      className="min-vh-100 d-flex flex-column"
+      style={{ backgroundColor: "#c9d7e0" }}
+    >
       <TopNav
         title="Profile"
         userId={userId}
@@ -135,8 +234,12 @@ const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) 
         activePage="profile"
         onNavigate={onNavigate}
       />
+
       <div className="container py-5">
-        <div className="card shadow-sm border-0 mx-auto" style={{ maxWidth: 700, borderRadius: 14 }}>
+        <div
+          className="card shadow-sm border-0 mx-auto"
+          style={{ maxWidth: 900, borderRadius: 14 }}
+        >
           <div className="card-body p-4">
             <h2 className="mb-4" style={{ color: "#2c5282", fontWeight: "bold" }}>
               My Profile
@@ -146,7 +249,6 @@ const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) 
               <p>Loading profile...</p>
             ) : (
               <>
-                {/* PROFILE INFO */}
                 <form onSubmit={handleSave}>
                   <div className="mb-3">
                     <label className="form-label fw-semibold">Name</label>
@@ -178,10 +280,14 @@ const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) 
                       type="text"
                       name="role"
                       className="form-control"
-                      value={profile.role}
+                      value={userRole}
                       disabled
                     />
-                    <div className="form-text">Role is currently read-only.</div>
+                    <div className="form-text">
+                      {userRole === "admin"
+                        ? "Your role is shown here. Admins can manage user roles in the section below."
+                        : "Your role is shown here. Only admins can change user roles."}
+                    </div>
                   </div>
 
                   {message && <div className="alert alert-success">{message}</div>}
@@ -210,7 +316,6 @@ const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) 
 
                 <hr className="my-4" />
 
-                {/* CHANGE PASSWORD */}
                 <h5 className="mb-3" style={{ color: "#2c5282", fontWeight: "bold" }}>
                   Change Password
                 </h5>
@@ -250,6 +355,89 @@ const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) 
                     {pwSaving ? "Updating..." : "Update Password"}
                   </button>
                 </form>
+
+                {userRole === "admin" && (
+                  <>
+                    <hr className="my-4" />
+
+                    <h5
+                      className="mb-3"
+                      style={{ color: "#2c5282", fontWeight: "bold" }}
+                    >
+                      User Role Management
+                    </h5>
+                    <p className="text-muted mb-3">
+                      Admins can assign roles and control whether users have full
+                      editing access or view-only access.
+                    </p>
+
+                    {roleSaveMessage && (
+                      <div className="alert alert-success">{roleSaveMessage}</div>
+                    )}
+                    {roleSaveError && (
+                      <div className="alert alert-danger">{roleSaveError}</div>
+                    )}
+
+                    {usersLoading ? (
+                      <p>Loading users...</p>
+                    ) : (
+                      <div className="table-responsive">
+                        <table className="table align-middle">
+                          <thead>
+                            <tr>
+                              <th>Name</th>
+                              <th>Email</th>
+                              <th>Role</th>
+                              <th>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {managedUsers.map((user) => (
+                              <tr key={user.id}>
+                                <td>{user.name || "N/A"}</td>
+                                <td>{user.email || "N/A"}</td>
+                                <td style={{ minWidth: 180 }}>
+                                  <select
+                                    className="form-select"
+                                    value={user.role}
+                                    onChange={(e) =>
+                                      handleManagedRoleChange(
+                                        user.id,
+                                        e.target.value as UserRole
+                                      )
+                                    }
+                                    disabled={savingRoleFor === user.id}
+                                  >
+                                    <option value="lab_tech">lab_tech</option>
+                                    <option value="admin">admin</option>
+                                  </select>
+                                </td>
+                                <td>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-primary"
+                                    style={{
+                                      backgroundColor: "#2c5282",
+                                      borderColor: "#2c5282",
+                                    }}
+                                    onClick={() =>
+                                      handleSaveManagedRole(user.id, user.role)
+                                    }
+                                    disabled={savingRoleFor === user.id}
+                                  >
+                                    {savingRoleFor === user.id
+                                      ? "Saving..."
+                                      : "Save"}
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </>
+                )}
               </>
             )}
           </div>
