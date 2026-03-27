@@ -43,6 +43,16 @@ const STATUS_OPTIONS: Specimen['status'][] = [
   'Pending', 'In Progress', 'Incubating', 'Awaiting AST', 'Completed', 'Flagged',
 ];
 
+const LOCATION_CONFIG = {
+  Shelf: Array.from({ length: 10 }, (_, i) => `Shelf ${i + 1}`),
+  Freezer: ['Freezer A', 'Freezer B', 'Freezer C', 'Freezer D', 'Freezer E'],
+  Fridge: ['Fridge A', 'Fridge B', 'Fridge C', 'Fridge D', 'Fridge E'],
+  "Lab Bench": Array.from({ length: 10 }, (_, i) => `Lab Bench ${i + 1}`),
+  Rack: Array.from({ length: 10 }, (_, i) => `Rack ${i + 1}`)
+};
+
+const SLOT_OPTIONS = Array.from({ length: 10 }, (_, i) => `Slot ${i + 1}`);
+
 // Reusable modal
 interface SpecimenModalProps {
   mode: 'add' | 'edit';
@@ -54,11 +64,17 @@ interface SpecimenModalProps {
 
 const SpecimenModal: React.FC<SpecimenModalProps> = ({ mode, initialData = EMPTY_FORM, onClose, onSubmit, saving }) => {
   const [form, setForm] = useState<SpecimenFormData>(initialData);
+  const [locationType, setLocationType] = useState('');
+  const [locationValue, setLocationValue] = useState('');
+  const [slot, setSlot] = useState('');
   const [errors, setErrors] = useState<Partial<SpecimenFormData>>({});
 
   useEffect(() => {
     setForm(initialData);
     setErrors({});
+    setLocationType('');
+    setLocationValue('');
+    setSlot('');
   }, [initialData]);
 
   const validate = () => {
@@ -78,7 +94,15 @@ const SpecimenModal: React.FC<SpecimenModalProps> = ({ mode, initialData = EMPTY
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    await onSubmit(form);
+    const finalLocation =
+      locationType === 'Rack'
+        ? `${locationValue}, ${slot}`
+        : locationValue;
+
+    await onSubmit({
+      ...form,
+      location: finalLocation
+    });
   };
 
   return (
@@ -127,16 +151,52 @@ const SpecimenModal: React.FC<SpecimenModalProps> = ({ mode, initialData = EMPTY
                     {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
-                <div className="mb-1">
+                <div className="mb-3">
                   <label className="form-label fw-semibold small">Storage Location</label>
-                  <input
-                    name="location"
-                    type="text"
-                    className="form-control"
-                    placeholder="e.g. Rack A, Slot 3"
-                    value={form.location}
-                    onChange={handleChange}
-                  />
+
+                  {/* Step 1: Location Type */}
+                  <select
+                    className="form-select mb-2"
+                    value={locationType}
+                    onChange={(e) => {
+                      setLocationType(e.target.value);
+                      setLocationValue('');
+                      setSlot('');
+                    }}
+                  >
+                    <option value="">Select Location Type</option>
+                    {Object.keys(LOCATION_CONFIG).map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+
+                  {/* Step 2: Specific Location */}
+                  {locationType && (
+                    <select
+                      className="form-select mb-2"
+                      value={locationValue}
+                      onChange={(e) => setLocationValue(e.target.value)}
+                    >
+                      <option value="">Select {locationType}</option>
+                      {LOCATION_CONFIG[locationType as keyof typeof LOCATION_CONFIG].map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  {/* Step 3: Slot (only for Rack) */}
+                  {locationType === 'Rack' && locationValue && (
+                    <select
+                      className="form-select"
+                      value={slot}
+                      onChange={(e) => setSlot(e.target.value)}
+                    >
+                      <option value="">Select Slot</option>
+                      {SLOT_OPTIONS.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
               <div className="modal-footer border-0 pt-2">
