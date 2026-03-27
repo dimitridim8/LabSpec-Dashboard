@@ -43,6 +43,16 @@ const STATUS_OPTIONS: Specimen['status'][] = [
   'Pending', 'In Progress', 'Incubating', 'Awaiting AST', 'Completed', 'Flagged',
 ];
 
+const LOCATION_CONFIG = {
+  Shelf: Array.from({ length: 10 }, (_, i) => `Shelf ${i + 1}`),
+  Freezer: ['Freezer A', 'Freezer B', 'Freezer C', 'Freezer D', 'Freezer E'],
+  Fridge: ['Fridge A', 'Fridge B', 'Fridge C', 'Fridge D', 'Fridge E'],
+  "Lab Bench": Array.from({ length: 10 }, (_, i) => `Lab Bench ${i + 1}`),
+  Rack: Array.from({ length: 10 }, (_, i) => `Rack ${i + 1}`)
+};
+
+const SLOT_OPTIONS = Array.from({ length: 10 }, (_, i) => `Slot ${i + 1}`);
+
 // Reusable modal
 interface SpecimenModalProps {
   mode: 'add' | 'edit';
@@ -54,11 +64,17 @@ interface SpecimenModalProps {
 
 const SpecimenModal: React.FC<SpecimenModalProps> = ({ mode, initialData = EMPTY_FORM, onClose, onSubmit, saving }) => {
   const [form, setForm] = useState<SpecimenFormData>(initialData);
+  const [locationType, setLocationType] = useState('');
+  const [locationValue, setLocationValue] = useState('');
+  const [slot, setSlot] = useState('');
   const [errors, setErrors] = useState<Partial<SpecimenFormData>>({});
 
   useEffect(() => {
     setForm(initialData);
     setErrors({});
+    setLocationType('');
+    setLocationValue('');
+    setSlot('');
   }, [initialData]);
 
   const validate = () => {
@@ -78,7 +94,15 @@ const SpecimenModal: React.FC<SpecimenModalProps> = ({ mode, initialData = EMPTY
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    await onSubmit(form);
+    const finalLocation =
+      locationType === 'Rack'
+        ? `${locationValue}, ${slot}`
+        : locationValue;
+
+    await onSubmit({
+      ...form,
+      location: finalLocation
+    });
   };
 
   return (
@@ -127,16 +151,52 @@ const SpecimenModal: React.FC<SpecimenModalProps> = ({ mode, initialData = EMPTY
                     {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
-                <div className="mb-1">
+                <div className="mb-3">
                   <label className="form-label fw-semibold small">Storage Location</label>
-                  <input
-                    name="location"
-                    type="text"
-                    className="form-control"
-                    placeholder="e.g. Rack A, Slot 3"
-                    value={form.location}
-                    onChange={handleChange}
-                  />
+
+                  {/* Step 1: Location Type */}
+                  <select
+                    className="form-select mb-2"
+                    value={locationType}
+                    onChange={(e) => {
+                      setLocationType(e.target.value);
+                      setLocationValue('');
+                      setSlot('');
+                    }}
+                  >
+                    <option value="">Select Location Type</option>
+                    {Object.keys(LOCATION_CONFIG).map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+
+                  {/* Step 2: Specific Location */}
+                  {locationType && (
+                    <select
+                      className="form-select mb-2"
+                      value={locationValue}
+                      onChange={(e) => setLocationValue(e.target.value)}
+                    >
+                      <option value="">Select {locationType}</option>
+                      {LOCATION_CONFIG[locationType as keyof typeof LOCATION_CONFIG].map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  {/* Step 3: Slot (only for Rack) */}
+                  {locationType === 'Rack' && locationValue && (
+                    <select
+                      className="form-select"
+                      value={slot}
+                      onChange={(e) => setSlot(e.target.value)}
+                    >
+                      <option value="">Select Slot</option>
+                      {SLOT_OPTIONS.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
               <div className="modal-footer border-0 pt-2">
@@ -158,8 +218,18 @@ const SpecimenModal: React.FC<SpecimenModalProps> = ({ mode, initialData = EMPTY
 interface SpecimenIntakeProps {
   onAddSpecimen: (data: SpecimenFormData) => Promise<void>;
 }
+function generateSpecimenId(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
-function generateDummySpecimen(barcode: string): {
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+
+  return result;
+}
+
+function generateDummySpecimen(): {
   specimen_code: string;
   sample_type: string;
   status: Specimen['status'];
@@ -179,7 +249,7 @@ function generateDummySpecimen(barcode: string): {
   const rand = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
   return {
-    specimen_code: barcode,
+    specimen_code: generateSpecimenId(),
     sample_type: rand(sampleTypes),
     status: rand(statuses),
     location: `Rack ${Math.ceil(Math.random() * 5)}, Slot ${Math.ceil(Math.random() * 10)}`
@@ -188,8 +258,36 @@ function generateDummySpecimen(barcode: string): {
 
 const SpecimenIntake: React.FC<SpecimenIntakeProps> = ({ onAddSpecimen }) => {
   const [barcode, setBarcode] = useState<string>('');
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [pendingSpecimen, setPendingSpecimen] = useState<SpecimenFormData | null>(null);
+
+  // location selection state
+  const [locationType, setLocationType] = useState('');
+  const [locationValue, setLocationValue] = useState('');
+  const [slot, setSlot] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const handleLocationSubmit = async () => {
+    if (!pendingSpecimen) return;
+
+    const finalLocation =
+      locationType === 'Rack'
+        ? `${locationValue}, ${slot}`
+        : locationValue;
+
+    await onAddSpecimen({
+      ...pendingSpecimen,
+      location: finalLocation
+    });
+
+    // reset
+    setShowLocationModal(false);
+    setPendingSpecimen(null);
+    setLocationType('');
+    setLocationValue('');
+    setSlot('');
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -219,14 +317,16 @@ const SpecimenIntake: React.FC<SpecimenIntakeProps> = ({ onAddSpecimen }) => {
       const decodedBarcode = await decodeBarcodeFromFile(file);
       setBarcode(decodedBarcode);
 
-      const dummy = generateDummySpecimen(decodedBarcode);
+      const dummy = generateDummySpecimen();
 
-      await onAddSpecimen({
+      setPendingSpecimen({
         specimen_code: dummy.specimen_code,
         sample_type: dummy.sample_type,
         status: dummy.status,
-        location: dummy.location,
+        location: '' // will be set in modal
       });
+
+      setShowLocationModal(true);
 
     } catch (err) {
       console.error(err);
@@ -246,10 +346,84 @@ const SpecimenIntake: React.FC<SpecimenIntakeProps> = ({ onAddSpecimen }) => {
       </button>
       {barcode && (
         <div className="alert alert-success p-2">
-          Decoded Barcode: {barcode}
+          Decoded Barcode Successfully!
         </div>
       )}
       {error && <div className="alert alert-danger p-2">{error}</div>}
+
+      {showLocationModal && (
+        <>
+          <div className="modal-backdrop fade show" />
+          <div className="modal d-block">
+            <div className="modal-dialog modal-dialog-centered">
+              <div className="modal-content p-3">
+
+                <h5>Select Storage Location</h5>
+
+                {/* Location Type */}
+                <select
+                  className="form-select mb-2"
+                  value={locationType}
+                  onChange={(e) => {
+                    setLocationType(e.target.value);
+                    setLocationValue('');
+                    setSlot('');
+                  }}
+                >
+                  <option value="">Select Location Type</option>
+                  {Object.keys(LOCATION_CONFIG).map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+
+                {/* Specific Location */}
+                {locationType && (
+                  <select
+                    className="form-select mb-2"
+                    value={locationValue}
+                    onChange={(e) => setLocationValue(e.target.value)}
+                  >
+                    <option value="">Select {locationType}</option>
+                    {LOCATION_CONFIG[locationType as keyof typeof LOCATION_CONFIG].map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Slot */}
+                {locationType === 'Rack' && locationValue && (
+                  <select
+                    className="form-select mb-2"
+                    value={slot}
+                    onChange={(e) => setSlot(e.target.value)}
+                  >
+                    <option value="">Select Slot</option>
+                    {SLOT_OPTIONS.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                )}
+
+                <div className="d-flex justify-content-end gap-2 mt-3">
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => setShowLocationModal(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleLocationSubmit}
+                  >
+                    Confirm
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
