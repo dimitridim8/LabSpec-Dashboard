@@ -71,7 +71,7 @@ const Profile: React.FC<ProfileProps> = ({
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("name, email, role, is_primary_admin, org_id, organizations(name)")
+        .select("name, email, role, is_primary_admin, org_id")
         .eq("id", userId)
         .single();
 
@@ -82,14 +82,31 @@ const Profile: React.FC<ProfileProps> = ({
         return;
       }
 
-      setProfile({
-        name: data?.name ?? "",
-        email: data?.email ?? "",
-        role: data?.role ?? "",
-        is_primary_admin: data?.is_primary_admin ?? false,
-        org_id: data?.org_id ?? null,
-        org_name: (data?.organizations as any)?.name ?? null,
-      });
+      if (data?.org_id) {
+        const { data: orgData } = await supabase
+          .from("organizations")
+          .select("name")
+          .eq("id", data.org_id)
+          .single();
+
+        setProfile({
+          name: data?.name ?? "",
+          email: data?.email ?? "",
+          role: data?.role ?? "",
+          is_primary_admin: data?.is_primary_admin ?? false,
+          org_id: data?.org_id ?? null,
+          org_name: orgData?.name ?? null,
+        });
+      } else {
+        setProfile({
+          name: data?.name ?? "",
+          email: data?.email ?? "",
+          role: data?.role ?? "",
+          is_primary_admin: data?.is_primary_admin ?? false,
+          org_id: null,
+          org_name: null,
+        });
+      }
 
       setLoading(false);
     };
@@ -534,7 +551,6 @@ const Profile: React.FC<ProfileProps> = ({
                                       <option value="admin">admin</option>
                                     </select>
                                   ) : (
-                                    /* The change is strictly inside this span! */
                                     <span className="badge bg-secondary">
                                       {profile.is_primary_admin && user.id === userId 
                                         ? "primary admin" 

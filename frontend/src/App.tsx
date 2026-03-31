@@ -53,6 +53,87 @@ const LOCATION_CONFIG = {
 
 const SLOT_OPTIONS = Array.from({ length: 10 }, (_, i) => `Slot ${i + 1}`);
 
+const OrgSetup: React.FC<{ userId: string; onComplete: () => void }> = ({ userId, onComplete }) => {
+  const [orgName, setOrgName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = orgName.trim();
+    if (!trimmed) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const { data: existingOrg } = await supabase
+        .from('organizations')
+        .select('id')
+        .eq('name', trimmed)
+        .maybeSingle();
+
+      if (!existingOrg) {
+        const { data: newOrg, error: orgErr } = await supabase
+          .from('organizations')
+          .insert({ name: trimmed })
+          .select('id')
+          .single();
+        if (orgErr) throw orgErr;
+        const { error: profileErr } = await supabase
+          .from('profiles')
+          .update({ org_id: newOrg.id, role: 'admin', is_primary_admin: true, membership_status: 'active' })
+          .eq('id', userId);
+        if (profileErr) throw profileErr;
+      } else {
+        const { error: profileErr } = await supabase
+          .from('profiles')
+          .update({ org_id: existingOrg.id, role: 'lab_tech', is_primary_admin: false, membership_status: 'pending' })
+          .eq('id', userId);
+        if (profileErr) throw profileErr;
+      }
+      onComplete();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-vh-100 d-flex align-items-center justify-content-center" style={{ backgroundColor: '#c9d7e0' }}>
+      <div className="card shadow border-0 p-4" style={{ width: 420, borderRadius: 12 }}>
+        <h4 className="fw-bold mb-1" style={{ color: '#2c5282' }}>Set Up Your Organization</h4>
+        <p className="text-muted small mb-4">
+          Enter your lab's organization name. If it doesn't exist yet, you'll be made the primary admin.
+          If it does, your request will be sent to an admin for approval.
+        </p>
+        <form onSubmit={handleSubmit}>
+          <div className="mb-3">
+            <label className="form-label fw-semibold small">Organization Name</label>
+            <input
+              type="text"
+              className="form-control"
+              placeholder="e.g. Hospital Lab 1"
+              value={orgName}
+              onChange={e => setOrgName(e.target.value)}
+              disabled={loading}
+              required
+            />
+          </div>
+          {error && <div className="alert alert-danger py-2 small">{error}</div>}
+          <button
+            type="submit"
+            className="btn btn-primary w-100"
+            style={{ backgroundColor: '#2c5282', borderColor: '#2c5282' }}
+            disabled={loading || !orgName.trim()}
+          >
+            {loading ? 'Setting up…' : 'Continue'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 // Reusable modal
 interface SpecimenModalProps {
   mode: 'add' | 'edit';
@@ -1295,7 +1376,7 @@ export default function App() {
   const [session, setSession] = useState<any>(null);
   const [showRegister, setShowRegister] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activePage, setActivePage] = useState<"dashboard" | "profile" | "help">("dashboard");
+  const [activePage, setActivePage] = useState<"dashboard" | "profile" | "help" | "org_setup">("dashboard");
   const [userRole, setUserRole] = useState<UserRole>("lab_tech");
   const [membershipStatus, setMembershipStatus] = useState<string>("active");
 
@@ -1327,7 +1408,7 @@ useEffect(() => {
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("role, membership_status")
+      .select("role, membership_status, org_id")
       .eq("id", session.user.id)
       .single();
 
@@ -1340,6 +1421,10 @@ useEffect(() => {
 
     setUserRole((data?.role as UserRole) || "lab_tech");
     setMembershipStatus(data?.membership_status || "active");
+
+    if (!data?.org_id) {
+      setActivePage("org_setup");
+    }
   };
 
   fetchUserRole();
@@ -1365,6 +1450,27 @@ useEffect(() => {
           </button>
         </div>
       </div>
+    );
+  }
+
+  const userId = session.user.id;
+  const email = session.user.email;
+
+  if (activePage === "org_setup") {
+    return (
+      <OrgSetup
+        userId={userId}
+        onComplete={async () => {
+          const { data } = await supabase
+            .from("profiles")
+            .select("role, membership_status, org_id")
+            .eq("id", userId)
+            .single();
+          setUserRole((data?.role as UserRole) || "lab_tech");
+          setMembershipStatus(data?.membership_status || "active");
+          setActivePage("dashboard");
+        }}
+      />
     );
   }
 
@@ -1431,9 +1537,6 @@ useEffect(() => {
       </div>
     );
   }
-
-  const userId = session.user.id;
-  const email = session.user.email;
 
   if (activePage === "profile") {
     return (
