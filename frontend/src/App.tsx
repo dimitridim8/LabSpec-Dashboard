@@ -1297,6 +1297,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activePage, setActivePage] = useState<"dashboard" | "profile" | "help">("dashboard");
   const [userRole, setUserRole] = useState<UserRole>("lab_tech");
+  const [membershipStatus, setMembershipStatus] = useState<string>("active");
+
   useEffect(() => {
   supabase.auth.getSession().then(({ data }) => {
     setSession(data.session);
@@ -1308,6 +1310,7 @@ export default function App() {
     if (!s) {
       setActivePage("dashboard");
       setUserRole("lab_tech");
+      setMembershipStatus("active");
     }
   });
 
@@ -1318,22 +1321,25 @@ useEffect(() => {
   const fetchUserRole = async () => {
     if (!session?.user?.id) {
       setUserRole("lab_tech");
+      setMembershipStatus("active");
       return;
     }
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, membership_status")
       .eq("id", session.user.id)
       .single();
 
     if (error) {
       console.error("Failed to fetch user role:", error.message);
       setUserRole("lab_tech");
+      setMembershipStatus("active");
       return;
     }
 
     setUserRole((data?.role as UserRole) || "lab_tech");
+    setMembershipStatus(data?.membership_status || "active");
   };
 
   fetchUserRole();
@@ -1356,6 +1362,70 @@ useEffect(() => {
             style={{ border: "none", background: "transparent", color: "#2c5282" }}
           >
             {showRegister ? "Have an account? Login" : "No account? Register"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (membershipStatus === "pending") {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#c9d7e0",
+        }}
+      >
+        <div
+          className="card shadow-sm border-0 p-5 text-center"
+          style={{ maxWidth: 480, borderRadius: 14 }}
+        >
+          <h4 style={{ color: "#2c5282", fontWeight: "bold" }}>Awaiting Approval</h4>
+          <p className="text-muted mt-3">
+            Your account is pending approval from your organization's admin. You will be able
+            to access the dashboard once your request has been approved.
+          </p>
+          <button
+            className="btn btn-outline-secondary mt-3"
+            onClick={() => supabase.auth.signOut()}
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (membershipStatus === "rejected") {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#c9d7e0",
+        }}
+      >
+        <div
+          className="card shadow-sm border-0 p-5 text-center"
+          style={{ maxWidth: 480, borderRadius: 14 }}
+        >
+          <h4 style={{ color: "#c53030", fontWeight: "bold" }}>Access Denied</h4>
+          <p className="text-muted mt-3">
+            Your request to join this organization was rejected. Please contact your
+            administrator if you believe this is an error.
+          </p>
+          <button
+            className="btn btn-outline-secondary mt-3"
+            onClick={() => supabase.auth.signOut()}
+          >
+            Sign Out
           </button>
         </div>
       </div>
