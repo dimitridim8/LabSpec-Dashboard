@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "../supabaseClient";
 
-type Page = "dashboard" | "profile" | "help";
+type Page = "dashboard" | "profile" | "help" | "organization";
 
 type TopNavProps = {
-  title: string;                 // e.g. "Dashboard", "Profile"
+  title: string;
   userId: string;
   fallbackEmail?: string;
-  activePage: Page;              // to optionally highlight the current page
+  activePage: Page;
   onNavigate: (page: Page) => void;
 };
 
@@ -20,28 +20,60 @@ const TopNav: React.FC<TopNavProps> = ({
 }) => {
   const [userName, setUserName] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isPrimaryAdmin, setIsPrimaryAdmin] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-  // Fetch name from profiles
+  // Fetch name and primary admin status
   useEffect(() => {
-    const fetchName = async () => {
+    const fetchProfile = async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("name")
+        .select("name, is_primary_admin, org_id")
         .eq("id", userId)
         .single();
 
       if (error) {
-        console.error("TopNav name fetch error:", error.message);
-        setUserName("");
+        console.error("TopNav profile fetch error:", error.message);
         return;
       }
 
       setUserName(data?.name ?? "");
+      setIsPrimaryAdmin(data?.is_primary_admin ?? false);
     };
 
-    fetchName();
+    fetchProfile();
   }, [userId]);
+
+  // Poll for pending join requests (primary admin only)
+  useEffect(() => {
+    if (!isPrimaryAdmin) {
+      setPendingCount(0);
+      return;
+    }
+
+    const fetchPending = async () => {
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("org_id")
+        .eq("id", userId)
+        .single();
+
+      if (!profileData?.org_id) return;
+
+      const { count } = await supabase
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", profileData.org_id)
+        .eq("membership_status", "pending");
+
+      setPendingCount(count ?? 0);
+    };
+
+    fetchPending();
+    const interval = setInterval(fetchPending, 30_000);
+    return () => clearInterval(interval);
+  }, [userId, isPrimaryAdmin]);
 
   // Close dropdown on outside click / ESC
   useEffect(() => {
@@ -49,11 +81,9 @@ const TopNav: React.FC<TopNavProps> = ({
       if (!menuRef.current) return;
       if (!menuRef.current.contains(e.target as Node)) setMenuOpen(false);
     };
-
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") setMenuOpen(false);
     };
-
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("keydown", onEsc);
     return () => {
@@ -83,7 +113,7 @@ const TopNav: React.FC<TopNavProps> = ({
         <div className="dropdown position-relative" ref={menuRef} style={{ overflow: "visible" }}>
           <button
             type="button"
-            className="btn btn-sm btn-light"
+            className="btn btn-sm btn-light position-relative"
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((v) => !v)}
             title="Menu"
@@ -96,6 +126,18 @@ const TopNav: React.FC<TopNavProps> = ({
             }}
           >
             ☰
+            {/* Burger button badge — visible when menu is closed and there are pending requests */}
+            {!menuOpen && pendingCount > 0 && (
+              <span
+                className="position-absolute top-0 start-100 translate-middle rounded-circle bg-danger"
+                style={{
+                  width: 10,
+                  height: 10,
+                  display: "block",
+                  border: "2px solid #2c5282",
+                }}
+              />
+            )}
           </button>
 
           <div
@@ -115,6 +157,23 @@ const TopNav: React.FC<TopNavProps> = ({
             >
               Profile
             </button>
+
+            {
+              <button
+                className={`dropdown-item d-flex align-items-center justify-content-between ${activePage === "organization" ? "active" : ""}`}
+                onClick={() => { setMenuOpen(false); onNavigate("organization"); }}
+              >
+                <span>Organization</span>
+                {pendingCount > 0 && (
+                  <span
+                    className="badge rounded-pill bg-danger ms-2"
+                    style={{ fontSize: "0.65rem" }}
+                  >
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+            }
 
             <button
               className={`dropdown-item ${activePage === "help" ? "active" : ""}`}

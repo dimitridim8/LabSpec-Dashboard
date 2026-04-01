@@ -8,7 +8,7 @@ type ProfileProps = {
   userId: string;
   fallbackEmail?: string;
   activePage: "profile";
-  onNavigate: (page: "dashboard" | "profile" | "help") => void;
+  onNavigate: (page: "dashboard" | "profile" | "help" | "organization") => void;
   userRole: UserRole;
   setUserRole: (role: UserRole) => void;
 };
@@ -17,13 +17,9 @@ type ProfileData = {
   name: string;
   email: string;
   role: string;
-};
-
-type ManagedUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
+  is_primary_admin: boolean;
+  org_id: string | null;
+  org_name: string | null;
 };
 
 const Profile: React.FC<ProfileProps> = ({
@@ -38,6 +34,9 @@ const Profile: React.FC<ProfileProps> = ({
     name: "",
     email: "",
     role: "",
+    is_primary_admin: false,
+    org_id: null,
+    org_name: null,
   });
 
   const [loading, setLoading] = useState(true);
@@ -50,12 +49,6 @@ const Profile: React.FC<ProfileProps> = ({
   const [pwMessage, setPwMessage] = useState<string | null>(null);
   const [pwError, setPwError] = useState<string | null>(null);
 
-  const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([]);
-  const [usersLoading, setUsersLoading] = useState(false);
-  const [roleSaveMessage, setRoleSaveMessage] = useState<string | null>(null);
-  const [roleSaveError, setRoleSaveError] = useState<string | null>(null);
-  const [savingRoleFor, setSavingRoleFor] = useState<string | null>(null);
-
   useEffect(() => {
     const fetchProfile = async () => {
       setLoading(true);
@@ -63,7 +56,7 @@ const Profile: React.FC<ProfileProps> = ({
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("name, email, role")
+        .select("name, email, role, is_primary_admin, org_id")
         .eq("id", userId)
         .single();
 
@@ -74,11 +67,31 @@ const Profile: React.FC<ProfileProps> = ({
         return;
       }
 
-      setProfile({
-        name: data?.name ?? "",
-        email: data?.email ?? "",
-        role: data?.role ?? "",
-      });
+      if (data?.org_id) {
+        const { data: orgData } = await supabase
+          .from("organizations")
+          .select("name")
+          .eq("id", data.org_id)
+          .single();
+
+        setProfile({
+          name: data?.name ?? "",
+          email: data?.email ?? "",
+          role: data?.role ?? "",
+          is_primary_admin: data?.is_primary_admin ?? false,
+          org_id: data?.org_id ?? null,
+          org_name: orgData?.name ?? null,
+        });
+      } else {
+        setProfile({
+          name: data?.name ?? "",
+          email: data?.email ?? "",
+          role: data?.role ?? "",
+          is_primary_admin: data?.is_primary_admin ?? false,
+          org_id: null,
+          org_name: null,
+        });
+      }
 
       setLoading(false);
     };
@@ -86,84 +99,9 @@ const Profile: React.FC<ProfileProps> = ({
     fetchProfile();
   }, [userId]);
 
-  const fetchManagedUsers = async () => {
-    if (userRole !== "admin") return;
-
-    setUsersLoading(true);
-    setRoleSaveError(null);
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, name, email, role")
-      .order("email", { ascending: true });
-
-    if (error) {
-      console.error("Failed to fetch users:", error.message);
-      setRoleSaveError("Failed to load users.");
-      setUsersLoading(false);
-      return;
-    }
-
-    const normalizedUsers: ManagedUser[] = (data || []).map((user) => ({
-      id: user.id,
-      name: user.name ?? "",
-      email: user.email ?? "",
-      role: user.role === "admin" ? "admin" : "lab_tech",
-    }));
-
-    setManagedUsers(normalizedUsers);
-    setUsersLoading(false);
-  };
-
-  useEffect(() => {
-    if (userRole === "admin") {
-      fetchManagedUsers();
-    }
-  }, [userRole]);
-
-  const handleManagedRoleChange = (targetUserId: string, newRole: UserRole) => {
-    setManagedUsers((prev) =>
-      prev.map((user) =>
-        user.id === targetUserId ? { ...user, role: newRole } : user
-      )
-    );
-    setRoleSaveMessage(null);
-    setRoleSaveError(null);
-  };
-
-  const handleSaveManagedRole = async (targetUserId: string, newRole: UserRole) => {
-    setSavingRoleFor(targetUserId);
-    setRoleSaveMessage(null);
-    setRoleSaveError(null);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ role: newRole })
-      .eq("id", targetUserId);
-
-    if (error) {
-      console.error("Failed to update role:", error.message);
-      setRoleSaveError("Failed to update user role.");
-      setSavingRoleFor(null);
-      return;
-    }
-
-    if (targetUserId === userId) {
-      setUserRole(newRole);
-      onNavigate("profile");
-    }
-
-    setRoleSaveMessage("User role updated successfully.");
-    setSavingRoleFor(null);
-    fetchManagedUsers();
-  };
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setProfile((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setProfile((prev) => ({ ...prev, [name]: value }));
     setMessage(null);
     setError(null);
   };
@@ -280,14 +218,40 @@ const Profile: React.FC<ProfileProps> = ({
                       type="text"
                       name="role"
                       className="form-control"
-                      value={userRole}
+                      value={profile.is_primary_admin ? "primary_admin" : userRole}
                       disabled
                     />
                     <div className="form-text">
-                      {userRole === "admin"
-                        ? "Your role is shown here. Admins can manage user roles in the section below."
+                      {profile.is_primary_admin
+                        ? "You are the primary admin of this organization."
+                        : userRole === "admin"
+                        ? "Your role is shown here. Manage users in the Organization tab."
                         : "Your role is shown here. Only admins can change user roles."}
                     </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="form-label fw-semibold">Organization</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={profile.org_name ?? "No organization"}
+                      disabled
+                    />
+                    {userRole === "admin" && (
+                      <div className="form-text">
+                        Manage your organization's members in the{" "}
+                        <button
+                          type="button"
+                          className="btn btn-link p-0 small"
+                          style={{ color: "#2c5282", verticalAlign: "baseline" }}
+                          onClick={() => onNavigate("organization")}
+                        >
+                          Organization
+                        </button>{" "}
+                        tab.
+                      </div>
+                    )}
                   </div>
 
                   {message && <div className="alert alert-success">{message}</div>}
@@ -302,7 +266,6 @@ const Profile: React.FC<ProfileProps> = ({
                     >
                       {saving ? "Saving..." : "Save Changes"}
                     </button>
-
                     <button
                       type="button"
                       className="btn btn-outline-secondary"
@@ -355,89 +318,6 @@ const Profile: React.FC<ProfileProps> = ({
                     {pwSaving ? "Updating..." : "Update Password"}
                   </button>
                 </form>
-
-                {userRole === "admin" && (
-                  <>
-                    <hr className="my-4" />
-
-                    <h5
-                      className="mb-3"
-                      style={{ color: "#2c5282", fontWeight: "bold" }}
-                    >
-                      User Role Management
-                    </h5>
-                    <p className="text-muted mb-3">
-                      Admins can assign roles and control whether users have full
-                      editing access or view-only access.
-                    </p>
-
-                    {roleSaveMessage && (
-                      <div className="alert alert-success">{roleSaveMessage}</div>
-                    )}
-                    {roleSaveError && (
-                      <div className="alert alert-danger">{roleSaveError}</div>
-                    )}
-
-                    {usersLoading ? (
-                      <p>Loading users...</p>
-                    ) : (
-                      <div className="table-responsive">
-                        <table className="table align-middle">
-                          <thead>
-                            <tr>
-                              <th>Name</th>
-                              <th>Email</th>
-                              <th>Role</th>
-                              <th>Action</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {managedUsers.map((user) => (
-                              <tr key={user.id}>
-                                <td>{user.name || "N/A"}</td>
-                                <td>{user.email || "N/A"}</td>
-                                <td style={{ minWidth: 180 }}>
-                                  <select
-                                    className="form-select"
-                                    value={user.role}
-                                    onChange={(e) =>
-                                      handleManagedRoleChange(
-                                        user.id,
-                                        e.target.value as UserRole
-                                      )
-                                    }
-                                    disabled={savingRoleFor === user.id}
-                                  >
-                                    <option value="lab_tech">lab_tech</option>
-                                    <option value="admin">admin</option>
-                                  </select>
-                                </td>
-                                <td>
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm btn-primary"
-                                    style={{
-                                      backgroundColor: "#2c5282",
-                                      borderColor: "#2c5282",
-                                    }}
-                                    onClick={() =>
-                                      handleSaveManagedRole(user.id, user.role)
-                                    }
-                                    disabled={savingRoleFor === user.id}
-                                  >
-                                    {savingRoleFor === user.id
-                                      ? "Saving..."
-                                      : "Save"}
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </>
-                )}
               </>
             )}
           </div>
