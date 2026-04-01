@@ -8,7 +8,7 @@ type ProfileProps = {
   userId: string;
   fallbackEmail?: string;
   activePage: "profile";
-  onNavigate: (page: "dashboard" | "profile" | "help") => void;
+  onNavigate: (page: "dashboard" | "profile" | "help" | "organization") => void;
   userRole: UserRole;
   setUserRole: (role: UserRole) => void;
 };
@@ -20,14 +20,6 @@ type ProfileData = {
   is_primary_admin: boolean;
   org_id: string | null;
   org_name: string | null;
-};
-
-type ManagedUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  membership_status: string;
 };
 
 const Profile: React.FC<ProfileProps> = ({
@@ -56,13 +48,6 @@ const Profile: React.FC<ProfileProps> = ({
   const [pwSaving, setPwSaving] = useState(false);
   const [pwMessage, setPwMessage] = useState<string | null>(null);
   const [pwError, setPwError] = useState<string | null>(null);
-
-  const [managedUsers, setManagedUsers] = useState<ManagedUser[]>([]);
-  const [usersLoading, setUsersLoading] = useState(false);
-  const [roleSaveMessage, setRoleSaveMessage] = useState<string | null>(null);
-  const [roleSaveError, setRoleSaveError] = useState<string | null>(null);
-  const [savingRoleFor, setSavingRoleFor] = useState<string | null>(null);
-  const [approvingFor, setApprovingFor] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -114,128 +99,9 @@ const Profile: React.FC<ProfileProps> = ({
     fetchProfile();
   }, [userId]);
 
-  const fetchManagedUsers = async () => {
-    if (userRole !== "admin" || !profile.org_id) return;
-
-    setUsersLoading(true);
-    setRoleSaveError(null);
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, name, email, role, membership_status")
-      .eq("org_id", profile.org_id)
-      .order("email", { ascending: true });
-
-    if (error) {
-      console.error("Failed to fetch users:", error.message);
-      setRoleSaveError("Failed to load users.");
-      setUsersLoading(false);
-      return;
-    }
-
-    const normalizedUsers: ManagedUser[] = (data || []).map((user) => ({
-      id: user.id,
-      name: user.name ?? "",
-      email: user.email ?? "",
-      role: user.role === "admin" ? "admin" : "lab_tech",
-      membership_status: user.membership_status ?? "active",
-    }));
-
-    setManagedUsers(normalizedUsers);
-    setUsersLoading(false);
-  };
-
-  useEffect(() => {
-    if (userRole === "admin" && profile.org_id) {
-      fetchManagedUsers();
-    }
-  }, [userRole, profile.org_id]);
-
-  const handleManagedRoleChange = (targetUserId: string, newRole: UserRole) => {
-    setManagedUsers((prev) =>
-      prev.map((user) =>
-        user.id === targetUserId ? { ...user, role: newRole } : user
-      )
-    );
-    setRoleSaveMessage(null);
-    setRoleSaveError(null);
-  };
-
-  const handleSaveManagedRole = async (targetUserId: string, newRole: UserRole) => {
-    setSavingRoleFor(targetUserId);
-    setRoleSaveMessage(null);
-    setRoleSaveError(null);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ role: newRole })
-      .eq("id", targetUserId);
-
-    if (error) {
-      console.error("Failed to update role:", error.message);
-      setRoleSaveError("Failed to update user role.");
-      setSavingRoleFor(null);
-      return;
-    }
-
-    if (targetUserId === userId) {
-      setUserRole(newRole);
-      onNavigate("profile");
-    }
-
-    setRoleSaveMessage("User role updated successfully.");
-    setSavingRoleFor(null);
-    fetchManagedUsers();
-  };
-
-  const handleApprove = async (targetUserId: string) => {
-    setApprovingFor(targetUserId);
-    setRoleSaveMessage(null);
-    setRoleSaveError(null);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ membership_status: "active" })
-      .eq("id", targetUserId);
-
-    if (error) {
-      setRoleSaveError("Failed to approve user.");
-      setApprovingFor(null);
-      return;
-    }
-
-    setRoleSaveMessage("User approved successfully.");
-    setApprovingFor(null);
-    fetchManagedUsers();
-  };
-
-  const handleReject = async (targetUserId: string) => {
-    setApprovingFor(targetUserId);
-    setRoleSaveMessage(null);
-    setRoleSaveError(null);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ membership_status: "rejected" })
-      .eq("id", targetUserId);
-
-    if (error) {
-      setRoleSaveError("Failed to reject user.");
-      setApprovingFor(null);
-      return;
-    }
-
-    setRoleSaveMessage("User rejected.");
-    setApprovingFor(null);
-    fetchManagedUsers();
-  };
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setProfile((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setProfile((prev) => ({ ...prev, [name]: value }));
     setMessage(null);
     setError(null);
   };
@@ -293,9 +159,6 @@ const Profile: React.FC<ProfileProps> = ({
     setConfirmPassword("");
     setPwSaving(false);
   };
-
-  const pendingUsers = managedUsers.filter((u) => u.membership_status === "pending");
-  const activeUsers = managedUsers.filter((u) => u.membership_status === "active");
 
   return (
     <div
@@ -362,7 +225,7 @@ const Profile: React.FC<ProfileProps> = ({
                       {profile.is_primary_admin
                         ? "You are the primary admin of this organization."
                         : userRole === "admin"
-                        ? "Your role is shown here. Admins can manage user roles in the section below."
+                        ? "Your role is shown here. Manage users in the Organization tab."
                         : "Your role is shown here. Only admins can change user roles."}
                     </div>
                   </div>
@@ -375,6 +238,20 @@ const Profile: React.FC<ProfileProps> = ({
                       value={profile.org_name ?? "No organization"}
                       disabled
                     />
+                    {userRole === "admin" && (
+                      <div className="form-text">
+                        Manage your organization's members in the{" "}
+                        <button
+                          type="button"
+                          className="btn btn-link p-0 small"
+                          style={{ color: "#2c5282", verticalAlign: "baseline" }}
+                          onClick={() => onNavigate("organization")}
+                        >
+                          Organization
+                        </button>{" "}
+                        tab.
+                      </div>
+                    )}
                   </div>
 
                   {message && <div className="alert alert-success">{message}</div>}
@@ -389,7 +266,6 @@ const Profile: React.FC<ProfileProps> = ({
                     >
                       {saving ? "Saving..." : "Save Changes"}
                     </button>
-
                     <button
                       type="button"
                       className="btn btn-outline-secondary"
@@ -442,152 +318,6 @@ const Profile: React.FC<ProfileProps> = ({
                     {pwSaving ? "Updating..." : "Update Password"}
                   </button>
                 </form>
-
-                {userRole === "admin" && (
-                  <>
-                    <hr className="my-4" />
-
-                    <h5
-                      className="mb-3"
-                      style={{ color: "#2c5282", fontWeight: "bold" }}
-                    >
-                      User Role Management
-                    </h5>
-                    <p className="text-muted mb-3">
-                      Admins can assign roles and control whether users have full
-                      editing access or view-only access.
-                    </p>
-
-                    {roleSaveMessage && (
-                      <div className="alert alert-success">{roleSaveMessage}</div>
-                    )}
-                    {roleSaveError && (
-                      <div className="alert alert-danger">{roleSaveError}</div>
-                    )}
-
-                    {pendingUsers.length > 0 && (
-                      <>
-                        <h6 className="fw-semibold mb-2" style={{ color: "#c05621" }}>
-                          Pending Approval ({pendingUsers.length})
-                        </h6>
-                        <div className="table-responsive mb-4">
-                          <table className="table align-middle">
-                            <thead>
-                              <tr>
-                                <th>Name</th>
-                                <th>Email</th>
-                                <th>Requested Role</th>
-                                <th>Actions</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {pendingUsers.map((user) => (
-                                <tr key={user.id}>
-                                  <td>{user.name || "N/A"}</td>
-                                  <td>{user.email || "N/A"}</td>
-                                  <td>
-                                    <span className="badge bg-warning text-dark">
-                                      {user.role}
-                                    </span>
-                                  </td>
-                                  <td className="d-flex gap-2">
-                                    <button
-                                      type="button"
-                                      className="btn btn-sm btn-success"
-                                      onClick={() => handleApprove(user.id)}
-                                      disabled={approvingFor === user.id}
-                                    >
-                                      {approvingFor === user.id ? "..." : "Approve"}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="btn btn-sm btn-outline-danger"
-                                      onClick={() => handleReject(user.id)}
-                                      disabled={approvingFor === user.id}
-                                    >
-                                      Reject
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </>
-                    )}
-
-                    {usersLoading ? (
-                      <p>Loading users...</p>
-                    ) : (
-                      <div className="table-responsive">
-                        <table className="table align-middle">
-                          <thead>
-                            <tr>
-                              <th>Name</th>
-                              <th>Email</th>
-                              <th>Role</th>
-                              <th>Action</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {activeUsers.map((user) => (
-                              <tr key={user.id}>
-                                <td>{user.name || "N/A"}</td>
-                                <td>{user.email || "N/A"}</td>
-                                <td style={{ minWidth: 180 }}>
-                                  {profile.is_primary_admin && user.id !== userId ? (
-                                    <select
-                                      className="form-select"
-                                      value={user.role}
-                                      onChange={(e) =>
-                                        handleManagedRoleChange(
-                                          user.id,
-                                          e.target.value as UserRole
-                                        )
-                                      }
-                                      disabled={savingRoleFor === user.id}
-                                    >
-                                      <option value="lab_tech">lab_tech</option>
-                                      <option value="admin">admin</option>
-                                    </select>
-                                  ) : (
-                                    <span className="badge bg-secondary">
-                                      {profile.is_primary_admin && user.id === userId 
-                                        ? "primary admin" 
-                                        : user.role}
-                                    </span>
-                                  )}
-                                </td>
-                                <td>
-                                  {profile.is_primary_admin && user.id !== userId ? (
-                                    <button
-                                      type="button"
-                                      className="btn btn-sm btn-primary"
-                                      style={{
-                                        backgroundColor: "#2c5282",
-                                        borderColor: "#2c5282",
-                                      }}
-                                      onClick={() =>
-                                        handleSaveManagedRole(user.id, user.role)
-                                      }
-                                      disabled={savingRoleFor === user.id}
-                                    >
-                                      {savingRoleFor === user.id ? "Saving..." : "Save"}
-                                    </button>
-                                  ) : (
-                                    <span className="text-muted small">
-                                      {user.id === userId ? "You" : "—"}
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </>
-                )}
               </>
             )}
           </div>
