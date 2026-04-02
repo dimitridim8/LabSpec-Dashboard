@@ -176,3 +176,14 @@ coverage/
 .vitepress/cache
 .yarn/*
 .pnp.*
+
+# Python virtual environment
+backend/venv/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment files
+.env
