@@ -1,0 +1,49 @@
+{
+  "faqs": [
+    {
+      "id": "org_info",
+      "question": "What organization am I in?",
+      "answer": "You can view your organization details in the Profile tab. Admins can manage members in the Organization tab.",
+      "keywords": ["organization", "org", "my company"],
+      "targetPage": "organization"
+    },
+    {
+      "id": "role_info",
+      "question": "How can I see my role?",
+      "answer": "Your role is displayed on the Profile page. Roles determine if you can edit specimens or only view them.",
+      "keywords": ["role", "permission", "access", "who am i"],
+      "targetPage": "profile"
+    },
+    {
+      "id": "add_specimen",
+      "question": "How do I add a new specimen?",
+      "answer": "Click the 'Add Specimen' button on the Dashboard. This is only available to Admin users.",
+      "keywords": ["add", "create", "new specimen", "insert"]
+    },
+    {
+        "id": "edit_specimen",
+        "question": "How do I edit a specimen?",
+        "answer": "Click the 'Edit' button next to a specimen on the Dashboard. This is only available to Admin users.",
+        "keywords": ["edit", "update", "modify", "change specimen"]
+    },
+    {
+        "id": "delete_specimen",
+        "question": "How do I delete a specimen?",
+        "answer": "Click the 'Delete' button next to a specimen on the Dashboard. This is only available to Admin users.",
+        "keywords": ["delete", "remove", "discard specimen"]
+    },
+    {
+        "id": "specimen_status",
+        "question": "How can I check the status of a specimen?",
+        "answer": "The status of each specimen is displayed in the Status column on the Dashboard. You can also click on a specimen to view more details.",
+        "keywords": ["status", "check status", "specimen state", "where is my specimen"]
+    },
+    {
+        "id": "help",
+        "question": "I need help with something else.",
+        "answer": "I can navigate you to the help page! Or for further assistance, please contact your administrator or support team.",
+        "keywords": ["help", "i need help", "i need assistance", "assistance"],
+        "targetPage": "help"
+    }
+  ]
+}
