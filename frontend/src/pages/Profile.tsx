@@ -2,24 +2,41 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import TopNav from "../components/TopNav";
 
+type UserRole = "admin" | "lab_tech";
+
 type ProfileProps = {
   userId: string;
   fallbackEmail?: string;
   activePage: "profile";
-  onNavigate: (page: "dashboard" | "profile" | "help") => void;
+  onNavigate: (page: "dashboard" | "profile" | "help" | "organization") => void;
+  userRole: UserRole;
+  setUserRole: (role: UserRole) => void;
 };
 
 type ProfileData = {
   name: string;
   email: string;
   role: string;
+  is_primary_admin: boolean;
+  org_id: string | null;
+  org_name: string | null;
 };
 
-const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) => {
+const Profile: React.FC<ProfileProps> = ({
+  userId,
+  fallbackEmail,
+  activePage,
+  onNavigate,
+  userRole,
+  setUserRole,
+}) => {
   const [profile, setProfile] = useState<ProfileData>({
     name: "",
     email: "",
     role: "",
+    is_primary_admin: false,
+    org_id: null,
+    org_name: null,
   });
 
   const [loading, setLoading] = useState(true);
@@ -39,7 +56,7 @@ const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) 
 
       const { data, error } = await supabase
         .from("profiles")
-        .select("name, email, role")
+        .select("name, email, role, is_primary_admin, org_id")
         .eq("id", userId)
         .single();
 
@@ -50,11 +67,31 @@ const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) 
         return;
       }
 
-      setProfile({
-        name: data?.name ?? "",
-        email: data?.email ?? "",
-        role: data?.role ?? "",
-      });
+      if (data?.org_id) {
+        const { data: orgData } = await supabase
+          .from("organizations")
+          .select("name")
+          .eq("id", data.org_id)
+          .single();
+
+        setProfile({
+          name: data?.name ?? "",
+          email: data?.email ?? "",
+          role: data?.role ?? "",
+          is_primary_admin: data?.is_primary_admin ?? false,
+          org_id: data?.org_id ?? null,
+          org_name: orgData?.name ?? null,
+        });
+      } else {
+        setProfile({
+          name: data?.name ?? "",
+          email: data?.email ?? "",
+          role: data?.role ?? "",
+          is_primary_admin: data?.is_primary_admin ?? false,
+          org_id: null,
+          org_name: null,
+        });
+      }
 
       setLoading(false);
     };
@@ -64,10 +101,7 @@ const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) 
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setProfile((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setProfile((prev) => ({ ...prev, [name]: value }));
     setMessage(null);
     setError(null);
   };
@@ -127,7 +161,10 @@ const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) 
   };
 
   return (
-    <div className="min-vh-100 d-flex flex-column" style={{ backgroundColor: "#c9d7e0" }}>
+    <div
+      className="min-vh-100 d-flex flex-column"
+      style={{ backgroundColor: "#c9d7e0" }}
+    >
       <TopNav
         title="Profile"
         userId={userId}
@@ -135,8 +172,12 @@ const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) 
         activePage="profile"
         onNavigate={onNavigate}
       />
+
       <div className="container py-5">
-        <div className="card shadow-sm border-0 mx-auto" style={{ maxWidth: 700, borderRadius: 14 }}>
+        <div
+          className="card shadow-sm border-0 mx-auto"
+          style={{ maxWidth: 900, borderRadius: 14 }}
+        >
           <div className="card-body p-4">
             <h2 className="mb-4" style={{ color: "#2c5282", fontWeight: "bold" }}>
               My Profile
@@ -146,7 +187,6 @@ const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) 
               <p>Loading profile...</p>
             ) : (
               <>
-                {/* PROFILE INFO */}
                 <form onSubmit={handleSave}>
                   <div className="mb-3">
                     <label className="form-label fw-semibold">Name</label>
@@ -178,10 +218,40 @@ const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) 
                       type="text"
                       name="role"
                       className="form-control"
-                      value={profile.role}
+                      value={profile.is_primary_admin ? "primary_admin" : userRole}
                       disabled
                     />
-                    <div className="form-text">Role is currently read-only.</div>
+                    <div className="form-text">
+                      {profile.is_primary_admin
+                        ? "You are the primary admin of this organization."
+                        : userRole === "admin"
+                        ? "Your role is shown here. Manage users in the Organization tab."
+                        : "Your role is shown here. Only admins can change user roles."}
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="form-label fw-semibold">Organization</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={profile.org_name ?? "No organization"}
+                      disabled
+                    />
+                    {userRole === "admin" && (
+                      <div className="form-text">
+                        Manage your organization's members in the{" "}
+                        <button
+                          type="button"
+                          className="btn btn-link p-0 small"
+                          style={{ color: "#2c5282", verticalAlign: "baseline" }}
+                          onClick={() => onNavigate("organization")}
+                        >
+                          Organization
+                        </button>{" "}
+                        tab.
+                      </div>
+                    )}
                   </div>
 
                   {message && <div className="alert alert-success">{message}</div>}
@@ -196,7 +266,6 @@ const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) 
                     >
                       {saving ? "Saving..." : "Save Changes"}
                     </button>
-
                     <button
                       type="button"
                       className="btn btn-outline-secondary"
@@ -210,7 +279,6 @@ const Profile: React.FC<ProfileProps> = ({ userId, fallbackEmail, onNavigate }) 
 
                 <hr className="my-4" />
 
-                {/* CHANGE PASSWORD */}
                 <h5 className="mb-3" style={{ color: "#2c5282", fontWeight: "bold" }}>
                   Change Password
                 </h5>
