@@ -875,7 +875,20 @@ const Dashboard: React.FC<{
             <div className="p-3 bg-light" style={{ height: '250px', overflowY: 'auto' }}>
               {chatMessages.map((msg, i) => (
                 <div key={i} className={`mb-2 ${msg.sender === 'user' ? 'text-end' : 'text-start'}`}>
-                  <span className={`badge text-wrap ${msg.sender === 'user' ? 'bg-secondary' : 'bg-primary'}`} style={{ whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: '100%', display: 'inline-block' }}>{msg.text}</span>
+                  {/* <span className={`badge text-wrap ${msg.sender === 'user' ? 'bg-secondary' : 'bg-primary'}`} style={{ whiteSpace: 'normal', wordBreak: 'break-word', maxWidth: '100%', display: 'inline-block' }}>{msg.text}</span> */}
+                  <span
+                    className="badge text-wrap"
+                    style={{
+                      backgroundColor: msg.sender === 'user' ? '#5d6c7a' : '#043366', // darker contrast for better visibility
+                      whiteSpace: 'normal',
+                      wordBreak: 'break-word',
+                      maxWidth: '100%',
+                      display: 'inline-block',
+                      fontSize: '0.875rem',
+                    }}
+                  >
+                    {msg.text}
+                  </span>
                 </div>
               ))}
             </div>
