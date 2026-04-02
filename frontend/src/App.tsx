@@ -11,6 +11,7 @@ import Help from "./pages/Help";
 import Organization from "./pages/Organization";
 import TopNav from "./components/TopNav";
 import JsBarcode from 'jsbarcode';
+import faqs from './data/faqs.json';
 
 interface Specimen {
   id: number;
@@ -510,11 +511,17 @@ const Dashboard: React.FC<{
   const [modalMode, setModalMode] = useState<'add' | 'edit' | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // ─── CHATBOT/LAB BOT STATES ────────────────────────────────────────────────────────────────
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<{ sender: 'user' | 'bot'; text: string }[]>([
     { sender: 'bot', text: 'Hello. I am LabBot. Ask me about specimen status, location, or details.' }
   ]);
   const [chatMinimized, setChatMinimized] = useState(false);
+  const [chatContext, setChatContext] = useState<{
+    intent: 'NONE' | 'AWAIT_NAV' | 'AWAIT_FAQ_FEEDBACK';
+    targetPage?: string;
+  }>({ intent: 'NONE' });
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
   const canEdit = userRole === "admin";
@@ -618,7 +625,63 @@ const Dashboard: React.FC<{
     if (!chatInput.trim()) return;
     const userMessage = chatInput.trim();
     const lower = userMessage.toLowerCase();
+    
+    // chat memory
     setChatMessages(prev => [...prev, { sender: 'user', text: userMessage }]);
+    setChatInput('');
+
+    if (chatContext.intent === 'AWAIT_NAV' && chatContext.targetPage) {
+    if (lower.includes('yes') || lower.includes('y') || lower.includes('sure')) {
+      setChatMessages(prev => [...prev, { sender: 'bot', text: `Navigating to ${chatContext.targetPage}...` }]);
+      onNavigate(chatContext.targetPage as any);
+      setChatContext({ intent: 'NONE' }); // Clear memory after action
+    } else {
+      setChatMessages(prev => [...prev, { sender: 'bot', text: "No problem. Staying here." }]);
+      setChatContext({ intent: 'NONE' });
+    }
+    setChatInput('');
+    return;
+  }
+
+    const matchHelp = faqs.faqs.find(faq => 
+    faq.keywords.some(keyword => lower.includes(keyword))
+  );
+
+  if (matchHelp) {
+    setChatMessages(prev => [...prev, { sender: 'bot', text: matchHelp.answer }]);
+    
+    // Follow-up: Ask if they want to go to the page
+    const destinationPage = (matchHelp as any).targetPage || 'help';
+    setChatMessages(prev => [...prev, { sender: 'bot', text: `Would you like to open the full ${destinationPage} page for more details?` }]);
+    setChatContext({ intent: 'AWAIT_NAV', targetPage: destinationPage });
+    
+    setChatInput('');
+    return;
+  }
+  
+    // general dashboard inquiries
+    // if (lower.includes('go to help') || lower.includes('navigate to help') || lower.includes('help page') || lower.includes('i need help')) {
+    //   setChatMessages(prev => [...prev, { sender: 'bot', text: "I can open the Help page which has our full FAQ. Would you like to go there?" }]);
+    //   setChatContext({ intent: 'AWAIT_NAV', targetPage: 'help' });
+    //   setChatInput('');
+    //   return;
+    // }
+
+    // contact support
+    if (lower.includes('contact support') || lower.includes('need support') || lower.includes('support contact') || lower.includes('support')) {
+      setChatMessages(prev => [...prev, { sender: 'bot', text: 'You can contact support by emailing: labspecdashboard@gmail.com' }]);
+      setChatInput('');
+      return;
+    }
+    if (lower.includes('roles') || lower.includes('permissions')) {
+      setChatMessages(prev => [...prev, { sender: 'bot', text: 'User Roles:\n- Admin: Full access, can add/edit specimens and manage users.\n- Lab Tech: Can view specimens and their details but cannot add or edit.' }]);
+      setChatMessages(prev => [...prev, { sender: 'bot', text: 'Do you want to see your current roles and permissions?' }]);
+      setChatContext({ intent: 'AWAIT_NAV', targetPage: 'profile' });
+      setChatInput('');
+      return;
+    }
+
+    // specimen status inquiries
     let response = "I'm sorry, I can only assist with specimen status, location, and basic workflow questions.";
     const foundSpecimen = specimens.find(s => lower.includes(s.specimen_code?.toLowerCase() ?? "") || lower.includes(s.sample_type?.toLowerCase() ?? ""));
     if (lower.includes('status') && foundSpecimen) response = `Specimen ${foundSpecimen.specimen_code} is currently ${foundSpecimen.status}.`;
