@@ -7,96 +7,130 @@ interface HomeProps {
 export function Home({ onNavigate }: HomeProps) {
   return (
     <div className="min-vh-100" style={{ backgroundColor: "#c9d7e0" }}>
-      {/* Navigation */}
+
+      {/* NAVBAR */}
       <nav className="navbar navbar-expand-lg" style={{ backgroundColor: "#2c5282" }}>
-        <div className="container-fluid">
+        <div className="container">
           <div className="d-flex align-items-center gap-2">
-            <img src={beaker} alt="Beaker Icon" style={{ width: 50, height: 40 }} />
-            <span className="navbar-brand text-white mb-0 bold-text" >LabSpec Dashboard</span>
+            <img src={beaker} alt="Beaker Icon" style={{ width: 45 }} />
+            <span className="navbar-brand text-white mb-0 fw-bold">
+              LabSpec Dashboard
+            </span>
           </div>
+
           <div className="d-flex gap-3">
             <button onClick={() => onNavigate("login")} className="btn btn-outline-light">
               Login
             </button>
-            <button onClick={() => onNavigate("register")} className="btn btn-light" style={{ color: "#2c5282" }}>
+            <button
+              onClick={() => onNavigate("register")}
+              className="btn btn-light fw-semibold"
+              style={{ color: "#2c5282" }}
+            >
               Get Started
             </button>
           </div>
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <section className="py-20 px-4">
-        <div className="max-w-7xl mx-auto text-center">
-          <h1 className="text-5xl font-bold mb-6" style={{ color: "#2c5282" }}>
+      {/* HERO */}
+      <section className="py-5 text-center">
+        <div className="container">
+          <h1 className="fw-bold mb-4" style={{ color: "#2c5282", fontSize: "2.8rem" }}>
             Professional Specimen Tracking for Microbiologists
           </h1>
-          <p className="text-xl mb-8 max-w-3xl mx-auto" style={{ color: "#1a3a5c" }}>
-            Streamline your laboratory workflow with our comprehensive specimen management system. 
+
+          <p className="lead mb-4" style={{ color: "#1a3a5c", maxWidth: 700, margin: "0 auto" }}>
+            Streamline your laboratory workflow with our comprehensive specimen management system.
             Track, analyze, and manage samples with confidence and precision.
           </p>
-          <div className="flex gap-4 justify-center">
-            <button onClick={() => onNavigate("register")} className="text-white px-8 py-3 rounded-lg hover:opacity-90 transition text-lg font-semibold" style={{ backgroundColor: "#2c5282" }}>
+
+          <div className="d-flex justify-content-center gap-3">
+            <button
+              onClick={() => onNavigate("register")}
+              className="btn px-4 py-2 text-white fw-semibold"
+              style={{ backgroundColor: "#2c5282" }}
+            >
               Start Free Trial
             </button>
-            <button onClick={() => onNavigate("login")} className="px-8 py-3 rounded-lg border-2 hover:bg-white/20 transition text-lg font-semibold" style={{ borderColor: "#2c5282", color: "#2c5282" }}>
+
+            <button
+              onClick={() => onNavigate("login")}
+              className="btn px-4 py-2 fw-semibold"
+              style={{ border: "2px solid #2c5282", color: "#2c5282" }}
+            >
               Sign In
             </button>
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-16 px-4">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-12" style={{ color: "#2c5282" }}>
+      {/* FEATURES */}
+      <section className="py-5">
+        <div className="container">
+          <h2 className="text-center fw-bold mb-5" style={{ color: "#2c5282" }}>
             Why Choose LabSpec?
           </h2>
-          <div className="grid md:grid-cols-3 gap-6">
+
+          <div className="row g-4">
             {[
-              { title: "Specimen Management", emoji: "🧪", desc: "Efficiently track and organize all your laboratory specimens in one centralized system." },
-              { title: "Real-time Analytics", emoji: "📊", desc: "Monitor lab performance with comprehensive dashboards and detailed reports." },
-              { title: "Secure & Compliant", emoji: "🛡️", desc: "HIPAA compliant with enterprise-grade security to protect sensitive laboratory data." },
-              { title: "Workflow Automation", emoji: "⚙️", desc: "Automate routine tasks and reduce manual data entry to save valuable time." },
-              { title: "Quality Control", emoji: "✅", desc: "Maintain high standards with built-in quality control checks and validation." },
-              { title: "Lab Integration", emoji: "🔬", desc: "Seamlessly integrate with existing laboratory equipment and information systems." }
+              { title: "Specimen Management", emoji: "🧪", desc: "Track and organize specimens in one system." },
+              { title: "Real-time Analytics", emoji: "📊", desc: "Monitor performance with dashboards and reports." },
+              { title: "Secure & Compliant", emoji: "🛡️", desc: "Enterprise-grade security and HIPAA compliance." },
+              { title: "Workflow Automation", emoji: "⚙️", desc: "Automate routine lab processes." },
+              { title: "Quality Control", emoji: "✅", desc: "Built-in validation and quality checks." },
+              { title: "Lab Integration", emoji: "🔬", desc: "Integrates with existing lab systems." }
             ].map((feature, idx) => (
-              <div key={idx} className="bg-white p-6 rounded-2xl shadow-lg border-none flex flex-col items-center text-center">
-                <div className="text-4xl mb-4 p-3 rounded-lg" style={{ backgroundColor: "#f0f4f8" }}>
-                  {feature.emoji}
+              <div key={idx} className="col-md-4">
+                <div
+                  className="bg-white rounded-4 shadow d-flex flex-column align-items-center justify-content-center text-center p-3"
+                  style={{
+                    height: "250px",   // 👈 FORCE SQUARE SHAPE
+                    width: "100%",
+                  }}
+                >
+                  <div className="mb-3 fs-2">{feature.emoji}</div>
+
+                  <h5 className="fw-bold" style={{ color: "#2c5282" }}>
+                    {feature.title}
+                  </h5>
+
+                  <p className="text-muted small mb-0">
+                    {feature.desc}
+                  </p>
                 </div>
-                <h3 className="text-xl font-bold mb-2" style={{ color: "#2c5282" }}>{feature.title}</h3>
-                <p className="text-gray-600 leading-relaxed">{feature.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-20 px-4">
-        <div className="max-w-4xl mx-auto text-center bg-white rounded-2xl shadow-xl p-12">
-          <h2 className="text-3xl font-bold mb-4" style={{ color: "#2c5282" }}>
-            Ready to Transform Your Laboratory?
-          </h2>
-          <p className="text-lg mb-8" style={{ color: "#1a3a5c" }}>
-            Join hundreds of microbiologists who trust LabSpec for their specimen management needs.
-          </p>
-          <button
-            onClick={() => onNavigate("register")}
-            className="text-white px-8 py-3 rounded-lg hover:opacity-90 transition text-lg inline-block font-semibold"
-            style={{ backgroundColor: "#2c5282" }}
-          >
-            Get Started Today
-          </button>
+      {/* CTA */}
+      <section className="py-5">
+        <div className="container">
+          <div className="bg-white rounded-4 shadow text-center p-5">
+            <h3 className="fw-bold mb-3" style={{ color: "#2c5282" }}>
+              Ready to Transform Your Laboratory?
+            </h3>
+
+            <p className="mb-4 text-muted">
+              Join microbiologists who trust LabSpec for specimen management.
+            </p>
+
+            <button
+              onClick={() => onNavigate("register")}
+              className="btn text-white px-4 py-2 fw-semibold"
+              style={{ backgroundColor: "#2c5282" }}
+            >
+              Get Started Today
+            </button>
+          </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="py-8" style={{ backgroundColor: "#2c5282" }}>
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="text-white/80">© 2026 LabSpec Dashboard. All rights reserved.</p>
-        </div>
+      {/* FOOTER */}
+      <footer className="py-3 text-center" style={{ backgroundColor: "#2c5282" }}>
+        <p className="text-white mb-0">© 2026 LabSpec Dashboard</p>
       </footer>
     </div>
   );
