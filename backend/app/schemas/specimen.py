@@ -3,13 +3,13 @@ from typing import Optional
 from datetime import datetime
 
 class SpecimenBase(BaseModel):
+    org_id: Optional[str] = None
     specimen_code: Optional[str] = None
     specimen_type: Optional[str] = None
     current_status: str
     storage_condition: Optional[str] = None
     storage_location: Optional[str] = None
 
-    # patient fields
     patient_mrn: Optional[str] = None
     patient_name: Optional[str] = None
     patient_dob: Optional[str] = None
@@ -17,7 +17,7 @@ class SpecimenBase(BaseModel):
 
 
 class SpecimenCreate(SpecimenBase):
-    pass
+    org_id: str
 
 
 class SpecimenUpdate(BaseModel):
@@ -28,8 +28,8 @@ class SpecimenUpdate(BaseModel):
 
     patient_mrn: Optional[str] = None
     patient_name: Optional[str] = None
-    patient_dob: Optional[datetime] = None
-    collection_time: Optional[datetime] = None
+    patient_dob: Optional[str] = None
+    collection_time: Optional[str] = None
 
 
 class Specimen(SpecimenBase):
