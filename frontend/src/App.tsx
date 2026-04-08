@@ -506,6 +506,7 @@ const Dashboard: React.FC<{
   const [selected, setSelected] = useState<Specimen | null>(null);
   const [filter, setFilter] = useState<string>('All');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [orgId, setOrgId] = useState<string | null>(null);
   const [locationFilter, setLocationFilter] = useState<string>('All');
   const [showAll, setShowAll] = useState(false);
   const [modalMode, setModalMode] = useState<'add' | 'edit' | null>(null);
@@ -527,21 +528,46 @@ const Dashboard: React.FC<{
   const canEdit = userRole === "admin";
 
   useEffect(() => {
-    const fetchSpecimens = async () => {
+    const fetchOrgAndSpecimens = async () => {
       try {
-        const res = await fetch(`${API_URL}/specimens/`);
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("org_id")
+          .eq("id", userId)
+          .single();
+
+        if (profileError) throw profileError;
+        if (!profile?.org_id) {
+          setSpecimens([]);
+          return;
+        }
+
+        setOrgId(profile.org_id);
+
+        const res = await fetch(`${API_URL}/specimens/?org_id=${profile.org_id}`);
         if (!res.ok) throw new Error(`Server error ${res.status}`);
+
         const data = await res.json();
         const normalized: Specimen[] = data.map((s: any) => ({
-          id: s.specimen_id, specimen_code: s.specimen_code, sample_type: s.specimen_type,
-          status: s.current_status, location: s.storage_location,
-          patient_name: s.patient_name, patient_mrn: s.patient_mrn, patient_dob: s.patient_dob, collection_time: s.collection_time,
+          id: s.specimen_id,
+          specimen_code: s.specimen_code,
+          sample_type: s.specimen_type,
+          status: s.current_status,
+          location: s.storage_location,
+          patient_name: s.patient_name,
+          patient_mrn: s.patient_mrn,
+          patient_dob: s.patient_dob,
+          collection_time: s.collection_time,
         }));
+
         setSpecimens(normalized);
-      } catch (err: unknown) { console.error('Failed to load specimens:', err); }
+      } catch (err) {
+        console.error("Failed to load specimens:", err);
+      }
     };
-    fetchSpecimens();
-  }, [API_URL]);
+
+    fetchOrgAndSpecimens();
+  }, [API_URL, userId]);
 
   const metrics = useMemo(() => ({
     "Pending": specimens.filter(s => s.status === "Pending").length,
@@ -566,55 +592,127 @@ const Dashboard: React.FC<{
   const displayedSpecimens = showAll ? filteredSpecimens : filteredSpecimens.slice(0, 8);
 
   const handleAdd = async (data: SpecimenFormData) => {
-    setSaving(true); setSaveError(null);
+    if (!orgId) {
+      setSaveError("No organization found for this user.");
+      return;
+    }
+
+    setSaving(true);
+    setSaveError(null);
+
     try {
       const res = await fetch(`${API_URL}/specimens/`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ specimen_code: data.specimen_code, specimen_type: data.sample_type || null, current_status: data.status, storage_location: data.location || null, storage_condition: null }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          org_id: orgId,
+          specimen_code: data.specimen_code,
+          specimen_type: data.sample_type || null,
+          current_status: data.status,
+          storage_location: data.location || null,
+          storage_condition: null
+        }),
       });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d?.detail ?? `Server error ${res.status}`); }
+
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d?.detail ?? `Server error ${res.status}`);
+      }
+
       const created = await res.json();
-      const newSpecimen: Specimen = { id: created.specimen_id, specimen_code: created.specimen_code, sample_type: created.specimen_type, status: created.current_status, location: created.storage_location };
+      const newSpecimen: Specimen = {
+        id: created.specimen_id,
+        specimen_code: created.specimen_code,
+        sample_type: created.specimen_type,
+        status: created.current_status,
+        location: created.storage_location
+      };
+
       setSpecimens(prev => [newSpecimen, ...prev]);
       setSelected(newSpecimen);
       setModalMode(null);
-    } catch (err: unknown) { setSaveError(err instanceof Error ? err.message : 'Failed to add specimen.'); }
-    finally { setSaving(false); }
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to add specimen.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleEdit = async (data: SpecimenFormData) => {
-    if (!selected) return;
-    setSaving(true); setSaveError(null);
+    if (!selected || !orgId) return;
+
+    setSaving(true);
+    setSaveError(null);
+
     try {
-      const res = await fetch(`${API_URL}/specimens/${selected.id}/`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ specimen_type: data.sample_type || null, current_status: data.status, storage_location: data.location || null }),
+      const res = await fetch(`${API_URL}/specimens/${selected.id}/?org_id=${orgId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          specimen_type: data.sample_type || null,
+          current_status: data.status,
+          storage_location: data.location || null
+        }),
       });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d?.detail ?? `Server error ${res.status}`); }
+
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d?.detail ?? `Server error ${res.status}`);
+      }
+
       const updated = await res.json();
-      const normalized: Specimen = { id: updated.specimen_id, specimen_code: updated.specimen_code, sample_type: updated.specimen_type, status: updated.current_status, location: updated.storage_location };
+      const normalized: Specimen = {
+        id: updated.specimen_id,
+        specimen_code: updated.specimen_code,
+        sample_type: updated.specimen_type,
+        status: updated.current_status,
+        location: updated.storage_location
+      };
+
       setSpecimens(prev => prev.map(s => s.id === normalized.id ? normalized : s));
       setSelected(normalized);
       setModalMode(null);
-    } catch (err: unknown) { setSaveError(err instanceof Error ? err.message : 'Failed to save changes.'); }
-    finally { setSaving(false); }
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save changes.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleMarkCompleted = async () => {
-    if (!selected) return;
-    setSaving(true); setSaveError(null);
+    if (!selected || !orgId) return;
+
+    setSaving(true);
+    setSaveError(null);
+
     try {
-      const res = await fetch(`${API_URL}/specimens/${selected.id}/`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      const res = await fetch(`${API_URL}/specimens/${selected.id}/?org_id=${orgId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ current_status: 'Completed' }),
       });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d?.detail ?? `Server error ${res.status}`); }
+
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d?.detail ?? `Server error ${res.status}`);
+      }
+
       const updated = await res.json();
-      const normalized: Specimen = { id: updated.specimen_id, specimen_code: updated.specimen_code, sample_type: updated.specimen_type, status: updated.current_status, location: updated.storage_location };
+      const normalized: Specimen = {
+        id: updated.specimen_id,
+        specimen_code: updated.specimen_code,
+        sample_type: updated.specimen_type,
+        status: updated.current_status,
+        location: updated.storage_location
+      };
+
       setSpecimens(prev => prev.map(s => s.id === normalized.id ? normalized : s));
       setSelected(normalized);
-    } catch (err: unknown) { setSaveError(err instanceof Error ? err.message : 'Failed to mark completed.'); }
-    finally { setSaving(false); }
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to mark completed.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const editInitialData: SpecimenFormData | undefined = selected
@@ -716,7 +814,22 @@ const Dashboard: React.FC<{
                 const patient_name = names[Math.floor(Math.random() * names.length)];
                 const patient_dob = randomDate();
                 const patient_mrn = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-                const payload = { specimen_code: data.specimen_code, specimen_type: data.sample_type || null, current_status: data.status, storage_location: data.location || null, storage_condition: null, patient_name, patient_dob, patient_mrn };
+                  if (!orgId) {
+                    alert("No organization found for this user.");
+                    return;
+                  }
+
+                  const payload = {
+                    org_id: orgId,
+                    specimen_code: data.specimen_code,
+                    specimen_type: data.sample_type || null,
+                    current_status: data.status,
+                    storage_location: data.location || null,
+                    storage_condition: null,
+                    patient_name,
+                    patient_dob,
+                    patient_mrn
+                  };
                 try {
                   const res = await fetch(`${API_URL}/specimens/`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
                   if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d?.detail ?? `Server error ${res.status}`); }
@@ -837,7 +950,7 @@ const Dashboard: React.FC<{
                       const newStatus = e.target.value as Specimen['status'];
                       setSaving(true); setSaveError(null);
                       try {
-                        const res = await fetch(`${API_URL}/specimens/${selected.id}/`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ current_status: newStatus }) });
+                        const res = await fetch(`${API_URL}/specimens/${selected.id}/?org_id=${orgId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ current_status: newStatus }) });
                         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d?.detail ?? `Server error ${res.status}`); }
                         const updated = await res.json();
                         const normalized: Specimen = { id: updated.specimen_id, specimen_code: updated.specimen_code, sample_type: updated.specimen_type, status: updated.current_status, location: updated.storage_location, patient_name: updated.patient_name, patient_mrn: updated.patient_mrn, patient_dob: updated.patient_dob, collection_time: updated.collection_time };
