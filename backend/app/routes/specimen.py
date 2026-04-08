@@ -1,6 +1,6 @@
 import random
 from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from app.schemas.specimen import SpecimenCreate, Specimen, SpecimenUpdate
 from app.supabase_client import supabase
 
@@ -11,10 +11,16 @@ def generate_code(length: int = 6) -> str:
     return ''.join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", k=length))
 
 
-# GET /specimens/
+# GET /specimens/?org_id=...
 @router.get("/", response_model=list[Specimen])
-def list_specimens():
-    result = supabase.table("specimens").select("*").execute()
+def list_specimens(org_id: str = Query(...)):
+    result = (
+        supabase
+        .table("specimens")
+        .select("*")
+        .eq("org_id", org_id)
+        .execute()
+    )
 
     if result.data is None:
         raise HTTPException(status_code=500, detail="Failed to fetch specimens")
@@ -27,7 +33,9 @@ def list_specimens():
 def create_specimen(specimen: SpecimenCreate):
     data = specimen.dict()
 
-    # Only generate code if not provided (important for barcode workflow)
+    if not data.get("org_id"):
+        raise HTTPException(status_code=400, detail="org_id is required")
+
     if not data.get("specimen_code"):
         data["specimen_code"] = generate_code()
 
@@ -42,9 +50,9 @@ def create_specimen(specimen: SpecimenCreate):
     return result.data[0]
 
 
-# PATCH /specimens/{specimen_id}
+# PATCH /specimens/{specimen_id}?org_id=...
 @router.patch("/{specimen_id}", response_model=Specimen)
-def update_specimen(specimen_id: int, updates: SpecimenUpdate):
+def update_specimen(specimen_id: int, updates: SpecimenUpdate, org_id: str = Query(...)):
     update_data = updates.dict(exclude_unset=True)
 
     if not update_data:
@@ -57,6 +65,7 @@ def update_specimen(specimen_id: int, updates: SpecimenUpdate):
         .table("specimens")
         .update(update_data)
         .eq("specimen_id", specimen_id)
+        .eq("org_id", org_id)
         .execute()
     )
 
