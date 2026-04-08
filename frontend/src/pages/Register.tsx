@@ -14,12 +14,11 @@ export default function Register({ onSuccess }: RegisterProps) {
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErr(null);
-    setLoading(true);
+  e.preventDefault();
+  setErr(null);
+  setLoading(true);
 
-    const { data, error } = await supabase.auth.signUp({ email, password });
-
+  const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) {
       setLoading(false);
       setErr(error.message);
@@ -27,22 +26,28 @@ export default function Register({ onSuccess }: RegisterProps) {
     }
 
     const userId = data.user?.id;
-    if (userId) {
-      const { error: profileErr } = await supabase.from("profiles").insert({
-        id: userId,
-        name,
-        email,
-        role: "lab_tech",
-        is_primary_admin: false,
-        membership_status: "pending",
-        org_id: null,
-      });
 
-      if (profileErr) {
-        setLoading(false);
-        setErr(profileErr.message);
-        return;
-      }
+    if (!userId) {
+      setLoading(false);
+      setErr("User was created in auth, but no user ID was returned.");
+      return;
+    }
+
+    const { error: profileErr } = await supabase.from("profiles").insert({
+      id: userId,
+      name,
+      email,
+      role,
+      is_primary_admin: false,
+      membership_status: "pending",
+      org_id: null,
+    });
+
+    if (profileErr) {
+      console.error("Profile insert failed:", profileErr);
+      setLoading(false);
+      setErr(profileErr.message);
+      return;
     }
 
     setLoading(false);
@@ -82,7 +87,6 @@ export default function Register({ onSuccess }: RegisterProps) {
         >
           <option value="lab_tech">Lab Tech</option>
           <option value="admin">Admin</option>
-          <option value="doctor">Doctor</option>
         </select>
 
         <label htmlFor="email" style={{ display: 'block', textAlign: 'left', marginBottom: '0.25rem', fontWeight: '500', color: '#374151' }}>Email Address</label>
